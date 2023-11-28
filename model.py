@@ -23,7 +23,7 @@ import math
 
 # constants
 
-ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
+ModelPrediction = namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
 # helpers functions
 
@@ -38,9 +38,9 @@ def default(val, d):
 def identity(t, *args, **kwargs):
     return t
 
+
 # deterministic feed forward neural network
 class DeterministicFeedForwardNeuralNetwork(nn.Module):
-
     def __init__(self, dim_in, dim_out, hid_layers=[100,50],
                  use_batchnorm=False, negative_slope=0.01, dropout_rate=0):
         super(DeterministicFeedForwardNeuralNetwork, self).__init__()
@@ -96,7 +96,7 @@ class SemanticAttention(nn.Module):
             nn.Linear(hidden_size, 1, bias=False)
         )
 
-    def forward(self, z): # (bs*nreg*nhour)*2*dim
+    def forward(self, z):  # (bs*nreg*nhour)*2*dim
         w = self.project(z).mean(0)
         beta = torch.softmax(w, dim=0)
         beta = beta.expand((z.shape[0],) + beta.shape)
@@ -172,46 +172,46 @@ class KGFlowBlock(nn.Module):
 
         # transformer
         for i in range(self.num_sas):
-            out_temporal = self.blocks[i](out_temporal) # (bs*nreg)*nhour*dim
+            out_temporal = self.blocks[i](out_temporal)  # (bs*nreg)*nhour*dim
 
         # KGE: nreg*kgedim
-        emb = KGE[None,:,:,None].repeat(bs,1,1,1).reshape(bs*nreg, self.kgedim, 1)
-        emb = self.kge_projection(emb) # (bs*nreg)*dim*1
-        emb = emb.repeat(1,1,nhour).permute(0,2,1) # (bs*nreg)*nhour*d
+        emb = KGE[None, :, :, None].repeat(bs, 1, 1, 1).reshape(bs*nreg, self.kgedim, 1)
+        emb = self.kge_projection(emb)  # (bs*nreg)*dim*1
+        emb = emb.repeat(1, 1, nhour).permute(0, 2, 1)  # (bs*nreg)*nhour*d
         
         # fusion
-        out_spatial = out_spatial.reshape(-1, dim) # (bs*nreg*nhour)*dim
-        out_temporal = out_temporal.reshape(-1, dim) # (bs*nreg*nhour)*dim
-        emb = emb.reshape(-1, dim) # (bs*nreg*nhour)*dim
-        out = torch.stack([out_spatial, out_temporal], dim=1) # (bs*nreg*nhour)*2*dim
+        out_spatial = out_spatial.reshape(-1, dim)  # (bs*nreg*nhour)*dim
+        out_temporal = out_temporal.reshape(-1, dim)  # (bs*nreg*nhour)*dim
+        emb = emb.reshape(-1, dim)  # (bs*nreg*nhour)*dim
+        out = torch.stack([out_spatial, out_temporal], dim=1)  # (bs*nreg*nhour)*2*dim
 
         # Q=KGE, K=V=[spatial;temporal]
-        key = out.permute(1,0,2) # 2*(bs*nreg*nhour)*dim
-        value = out.permute(1,0,2) # 2*(bs*nreg*nhour)*dim
-        query = emb[None,:,:] # 1*(bs*nreg*nhour)*dim
+        key = out.permute(1, 0, 2)  # 2*(bs*nreg*nhour)*dim
+        value = out.permute(1, 0, 2)  # 2*(bs*nreg*nhour)*dim
+        query = emb[None, :, :]  # 1*(bs*nreg*nhour)*dim
 
         out, weight = self.mha(query, key, value)
-        out = out[0,:,:]
+        out = out[0, :, :]
 
         # out = out_spatial + out_temporal + emb
         out = out.reshape(bs*nreg, nhour, dim)
 
         # cond:nreg*cond_dim
-        cond = cond[None,:,:,None].repeat(bs,1,1,1).reshape(bs*nreg, self.cond_dim, 1)
-        cond = self.conditioner_projection(cond) # (bs*nreg)*2dim*1
+        cond = cond[None, :, :, None].repeat(bs, 1, 1, 1).reshape(bs*nreg, self.cond_dim, 1)
+        cond = self.conditioner_projection(cond)  # (bs*nreg)*2dim*1
 
-        out = out.permute(0,2,1) # (bs*nreg)*dim*nhour
-        out = self.middle_projection(out) # (bs*nreg)*2dim*nhour
+        out = out.permute(0, 2, 1)  # (bs*nreg)*dim*nhour
+        out = self.middle_projection(out)  # (bs*nreg)*2dim*nhour
         out = out + cond  # (bs*nreg)*2dim*nhour
 
-        gate, filter = torch.chunk(out, 2, dim=1) # (bs*nreg)*dim*nhour
-        out = torch.sigmoid(gate) * torch.tanh(filter) # (bs*nreg)*dim*nhour
+        gate, filter = torch.chunk(out, 2, dim=1)  # (bs*nreg)*dim*nhour
+        out = torch.sigmoid(gate) * torch.tanh(filter)  # (bs*nreg)*dim*nhour
 
-        out = self.output_projection(out) # (bs*nreg)*2d*nhour
-        residual, skip = torch.chunk(out, 2, dim=1) # (bs*nreg)*d*nhour
+        out = self.output_projection(out)  # (bs*nreg)*2d*nhour
+        residual, skip = torch.chunk(out, 2, dim=1)  # (bs*nreg)*d*nhour
 
-        residual = residual.permute(0,2,1).reshape(bs, nreg, nhour, -1)
-        skip = skip.permute(0,2,1).reshape(bs, nreg, nhour, -1)
+        residual = residual.permute(0, 2, 1).reshape(bs, nreg, nhour, -1)
+        skip = skip.permute(0, 2, 1).reshape(bs, nreg, nhour, -1)
         
         return (x_in + residual) / math.sqrt(2.0), skip
 
@@ -228,10 +228,10 @@ class KGFlow(nn.Module):
 
         fea_dim = d.features.shape[1]
 
-        self.features = nn.Embedding.from_pretrained(torch.tensor(d.features, dtype = torch.float), freeze=True)
+        self.features = nn.Embedding.from_pretrained(torch.tensor(d.features, dtype=torch.float), freeze=True)
 
         # use pretrain KGE
-        self.KGE=nn.Embedding.from_pretrained(torch.tensor(d.KGE_pretrain, dtype = torch.float), freeze=True)
+        self.KGE = nn.Embedding.from_pretrained(torch.tensor(d.KGE_pretrain, dtype=torch.float), freeze=True)
         kgedim = d.KGE_pretrain.shape[1]
         
         scale_cat_dim = 16
@@ -264,8 +264,8 @@ class KGFlow(nn.Module):
 
         residual_layers = kwargs['n_layer']
         self.residual_layers = nn.ModuleList([
-            KGFlowBlock(dim = trans_dim, nr = nr, nhour = nhour, 
-                        cond_dim = cond_dim, kwargs = kwargs, kgedim = kgedim)
+            KGFlowBlock(dim=trans_dim, nr=nr, nhour=nhour,
+                        cond_dim=cond_dim, kwargs=kwargs, kgedim=kgedim)
             for i in range(residual_layers)
         ])
         
@@ -281,27 +281,27 @@ class KGFlow(nn.Module):
         bs, nreg, nhour, _ = x_in.shape
         
         # feature condition
-        E = self.features.weight # ne*fea_dim
-        E = E[regids] # nreg*fea_dim, only use region emb in KG
-        E = self.kge_mlp(E) # nreg*kge_cat_dim
+        E = self.features.weight  # ne*fea_dim
+        E = E[regids]  # nreg*fea_dim, only use region emb in KG
+        E = self.kge_mlp(E)  # nreg*kge_cat_dim
         
         # add scale condition
-        cond = predscale # bs*nreg*nhour*2
-        cond = cond[0,:,0,:1] # nreg*1
-        cond = self.scale_mlp(cond) # nreg*scale_cat_dim
-        E = torch.cat((E, cond), dim = 1) # nreg*(kge_cat_dim+scale_cat_dim)
+        cond = predscale  # bs*nreg*nhour*2
+        cond = cond[0, :, 0, :1]  # nreg*1
+        cond = self.scale_mlp(cond)  # nreg*scale_cat_dim
+        E = torch.cat((E, cond), dim=1)  # nreg*(kge_cat_dim+scale_cat_dim)
 
-        x = x_in.reshape(bs, nreg, -1) # bs*nreg*2nhour
-        t = t[:,None,:] # bs*1*time_dim
-        x = x.view(bs, nreg, -1, 2) # bs*nreg*nhour*2
+        x = x_in.reshape(bs, nreg, -1)  # bs*nreg*2nhour
+        t = t[:, None, :]  # bs*1*time_dim
+        x = x.view(bs, nreg, -1, 2)  # bs*nreg*nhour*2
 
         # input Conv1*1
-        x = x.view(bs * nreg, -1, self.flow_channels) # (bs*nreg)*nhour*2
-        x = x.permute(0, 2, 1) # (bs*nreg)*2*nhour
-        x = self.input_projection(x) # (bs*nreg)*xt_cat_dim*nhour
+        x = x.view(bs * nreg, -1, self.flow_channels)  # (bs*nreg)*nhour*2
+        x = x.permute(0, 2, 1)  # (bs*nreg)*2*nhour
+        x = self.input_projection(x)  # (bs*nreg)*xt_cat_dim*nhour
         x = F.relu(x)
-        x = x.permute(0, 2, 1) # (bs*nreg)*nhour*xt_cat_dim
-        x = x.view(bs, nreg, nhour, -1) # bs*nreg*nhour*xt_cat_dim
+        x = x.permute(0, 2, 1)  # (bs*nreg)*nhour*xt_cat_dim
+        x = x.view(bs, nreg, nhour, -1)  # bs*nreg*nhour*xt_cat_dim
 
         # KGE
         KGE = self.KGE.weight
@@ -314,12 +314,12 @@ class KGFlow(nn.Module):
 
         out = skip / math.sqrt(len(self.residual_layers))
 
-        out = x.reshape(bs*nreg, nhour, -1) # (bs*nreg)*nhour*dim
-        out = out.permute(0, 2, 1) # (bs*nreg)*dim*nhour
-        out = self.middle_projection(out) # (bs*nreg)*2*nhour
+        out = x.reshape(bs*nreg, nhour, -1)  # (bs*nreg)*nhour*dim
+        out = out.permute(0, 2, 1)  # (bs*nreg)*dim*nhour
+        out = self.middle_projection(out)  # (bs*nreg)*2*nhour
         out = F.relu(out)
-        out = self.output_projection(out) # (bs*nreg)*2*nhour
-        out = out.permute(0, 2, 1) # (bs*nreg)*nhour*2
+        out = self.output_projection(out)  # (bs*nreg)*2*nhour
+        out = out.permute(0, 2, 1)  # (bs*nreg)*nhour*2
         out = out.reshape(bs, nreg, nhour, -1)
 
         return out
@@ -508,7 +508,6 @@ class GaussianDiffusion(nn.Module):
 
         maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
 
-        
         if self.objective == 'pred_noise':
             pred_noise = model_output
             x_start = self.predict_start_from_noise(x, t, pred_noise, f_phi)
@@ -594,7 +593,7 @@ class GaussianDiffusion(nn.Module):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         # noise sample
-        x_T_mean = self.compute_guiding_prediction(x_start, regids) # bs*nreg*nhour*2
+        x_T_mean = self.compute_guiding_prediction(x_start, regids)  # bs*nreg*nhour*2
         assert x_T_mean.shape == x_start.shape
 
         x = self.q_sample(x_start = x_start, x_T_mean = x_T_mean, t = t, noise = noise) # shape=x_start.shape
@@ -611,7 +610,7 @@ class GaussianDiffusion(nn.Module):
 
         # predict and take gradient step
 
-        model_out = self.model(x, regids, t, self.g, self.g_train, x_T_mean) # shape=x_start.shape
+        model_out = self.model(x, regids, t, self.g, self.g_train, x_T_mean)  # shape=x_start.shape
 
         if self.objective == 'pred_noise':
             target = noise

@@ -26,7 +26,7 @@ from model import KGFlow, GaussianDiffusion, DeterministicFeedForwardNeuralNetwo
 import setproctitle
 setproctitle.setproctitle('sample@zzl')
 
-device = torch.device('cuda')
+device = torch.device('mps')
 
 class MyDataset(Dataset):
     def __init__(self, x, y):
@@ -49,24 +49,23 @@ class Experiment:
         self.dr = params['dr']
         self.kwargs = params
         self.kwargs['device'] = device
-        
 
         self.g, self.g_train, self.g_samp = self.build_graph()
 
     def build_graph(self):
-        edge_index = torch.tensor([[x[0] for x in d.kg_data], [x[2] for x in d.kg_data]], dtype = torch.long, device = device)
-        edge_type = torch.tensor([x[1] for x in d.kg_data], dtype = torch.int, device = device)
-        g = geoData(edge_index = edge_index, edge_type = edge_type)
+        edge_index = torch.tensor([[x[0] for x in d.kg_data], [x[2] for x in d.kg_data]], dtype=torch.long, device=device)
+        edge_type = torch.tensor([x[1] for x in d.kg_data], dtype=torch.int, device=device)
+        g = geoData(edge_index=edge_index, edge_type=edge_type)
 
         # trainkg
-        train_edge_index = torch.tensor([[x[0] for x in d.trainkg_data], [x[2] for x in d.trainkg_data]], dtype = torch.long, device = device)
+        train_edge_index = torch.tensor([[x[0] for x in d.trainkg_data], [x[2] for x in d.trainkg_data]], dtype=torch.long, device=device)
         train_edge_type = torch.tensor([x[1] for x in d.trainkg_data], dtype = torch.int, device = device)
-        g_train = geoData(edge_index = train_edge_index, edge_type = train_edge_type)
+        g_train = geoData(edge_index=train_edge_index, edge_type=train_edge_type)
 
         # samplekg
-        sample_edge_index = torch.tensor([[x[0] for x in d.samplekg_data], [x[2] for x in d.samplekg_data]], dtype = torch.long, device = device)
-        sample_edge_type = torch.tensor([x[1] for x in d.samplekg_data], dtype = torch.int, device = device)
-        g_samp = geoData(edge_index = sample_edge_index, edge_type = sample_edge_type)
+        sample_edge_index = torch.tensor([[x[0] for x in d.samplekg_data], [x[2] for x in d.samplekg_data]], dtype=torch.long, device=device)
+        sample_edge_type = torch.tensor([x[1] for x in d.samplekg_data], dtype=torch.int, device=device)
+        g_samp = geoData(edge_index=sample_edge_index, edge_type=sample_edge_type)
 
         return g, g_train, g_samp
 
@@ -116,13 +115,13 @@ class Experiment:
         
     def train_and_eval(self):
         print('building model....')
-        model = KGFlow(d = d, **self.kwargs)
+        model = KGFlow(d=d, **self.kwargs)
         model = model.to(device)
         trainids = torch.tensor(d.trainids, device=device)
         sampids = torch.tensor(d.sampids, device=device)
 
 
-        nn_x = torch.tensor([x[0] for x in d.scale_pred_data], device=device) # nreg*37
+        nn_x = torch.tensor([x[0] for x in d.scale_pred_data], device=device)  # nreg*37
         nn_y = torch.tensor([x[1] for x in d.scale_pred_data], device=device)
         nn_x_train, nn_y_train = nn_x[trainids], nn_y[trainids]
         nn_x_samp, nn_y_samp = nn_x[sampids], nn_y[sampids]
@@ -242,8 +241,8 @@ if __name__ == '__main__':
     seed = args.seed
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    torch.mps.manual_seed(seed)
+    torch.mps.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 

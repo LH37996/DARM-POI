@@ -26,7 +26,7 @@ from model import KGFlow, GaussianDiffusion, DeterministicFeedForwardNeuralNetwo
 import setproctitle
 setproctitle.setproctitle('KSTDiff@zzl')
 
-device = torch.device('cuda')
+device = torch.device('mps')
 
 class MyDataset(Dataset):
     def __init__(self, x, y):
@@ -49,31 +49,33 @@ class Experiment:
         self.dr = params['dr']
         self.kwargs = params
         self.kwargs['device'] = device
-        
 
         self.g, self.g_train, self.g_samp = self.build_graph()
 
     def build_graph(self):
-        edge_index = torch.tensor([[x[0] for x in d.kg_data], [x[2] for x in d.kg_data]], dtype = torch.long, device = device)
-        edge_type = torch.tensor([x[1] for x in d.kg_data], dtype = torch.int, device = device)
-        g = geoData(edge_index = edge_index, edge_type = edge_type)
+        edge_index = torch.tensor([[x[0] for x in d.kg_data], [x[2] for x in d.kg_data]],
+                                  dtype=torch.long, device=device)
+        edge_type = torch.tensor([x[1] for x in d.kg_data], dtype=torch.int64, device=device)
+        g = geoData(edge_index=edge_index, edge_type=edge_type)
 
         # trainkg
-        train_edge_index = torch.tensor([[x[0] for x in d.trainkg_data], [x[2] for x in d.trainkg_data]], dtype = torch.long, device = device)
-        train_edge_type = torch.tensor([x[1] for x in d.trainkg_data], dtype = torch.int, device = device)
-        g_train = geoData(edge_index = train_edge_index, edge_type = train_edge_type)
+        train_edge_index = torch.tensor([[x[0] for x in d.trainkg_data], [x[2] for x in d.trainkg_data]],
+                                        dtype=torch.long, device=device)
+        train_edge_type = torch.tensor([x[1] for x in d.trainkg_data], dtype=torch.int64, device=device)
+        g_train = geoData(edge_index=train_edge_index, edge_type=train_edge_type)
 
         # samplekg
-        sample_edge_index = torch.tensor([[x[0] for x in d.samplekg_data], [x[2] for x in d.samplekg_data]], dtype = torch.long, device = device)
-        sample_edge_type = torch.tensor([x[1] for x in d.samplekg_data], dtype = torch.int, device = device)
-        g_samp = geoData(edge_index = sample_edge_index, edge_type = sample_edge_type)
+        sample_edge_index = torch.tensor([[x[0] for x in d.samplekg_data], [x[2] for x in d.samplekg_data]],
+                                         dtype=torch.long, device=device)
+        sample_edge_type = torch.tensor([x[1] for x in d.samplekg_data], dtype=torch.int64, device=device)
+        g_samp = geoData(edge_index=sample_edge_index, edge_type=sample_edge_type)
 
         return g, g_train, g_samp
 
     def get_batch(self, train_data, trainids, idx):
-        batch = train_data[idx:idx + self.batch_size] 
-        out = torch.tensor(batch, dtype=torch.float, device=device) # bs*nreg*nhour*2
-        out = out[:,trainids,:,:]
+        batch = train_data[idx:idx + self.batch_size]
+        out = torch.tensor(batch, dtype=torch.float, device=device)  # bs*nreg*nhour*2
+        out = out[:, trainids, :, :]
         return out
 
     def evaluate_guidance_model(self, cond_pred_model, dataloader):
@@ -83,7 +85,7 @@ class Experiment:
             for i, batch in enumerate(dataloader):
                 batchx = batch['x']
                 batchy = batch['y']
-                pred = cond_pred_model(batchx) # bs*1
+                pred = cond_pred_model(batchx)  # bs*1
                 pred = pred.reshape(-1)
                 # rescale
                 m, M = d.min_data, d.max_data
@@ -98,11 +100,11 @@ class Experiment:
     def train_guidance_model(self, cond_pred_model, dataloader, opt):
         cond_pred_model.train()
         lossfunc = nn.MSELoss()
-        losses  =[]
+        losses = []
         for i, batch in enumerate(dataloader):
             batchx = batch['x']
             batchy = batch['y']
-            pred = cond_pred_model(batchx) # bs*1
+            pred = cond_pred_model(batchx)  # bs*1
             batchy = batchy.reshape(pred.shape)
             loss = lossfunc(pred, batchy)
 
@@ -116,7 +118,7 @@ class Experiment:
         
     def train_and_eval(self):
         print('building model....')
-        model = KGFlow(d = d, **self.kwargs)
+        model = KGFlow(d=d, **self.kwargs)
         model = model.to(device)
         trainids = torch.tensor(d.trainids, device=device)
         sampids = torch.tensor(d.sampids, device=device)
@@ -134,7 +136,7 @@ class Experiment:
         dim_in = nn_x.shape[1]
         dim_out = 1
         cond_pred_model = DeterministicFeedForwardNeuralNetwork(dim_in=dim_in, dim_out=dim_out).to(device)
-        opt_nn = torch.optim.Adam(cond_pred_model.parameters(), lr = self.kwargs['nn_lr'])
+        opt_nn = torch.optim.Adam(cond_pred_model.parameters(), lr=self.kwargs['nn_lr'])
         # pretrain cond_pred_model
         rmse_train = self.evaluate_guidance_model(cond_pred_model, train_loader)
         rmse_test = self.evaluate_guidance_model(cond_pred_model, test_loader)
@@ -144,32 +146,32 @@ class Experiment:
             loss_epoch = self.train_guidance_model(cond_pred_model, train_loader, opt_nn)
             rmse_train = self.evaluate_guidance_model(cond_pred_model, train_loader)
             rmse_test = self.evaluate_guidance_model(cond_pred_model, test_loader)
-            mlflow.log_metrics({'pre_loss':loss_epoch,
-                                'pre_rmse_train':rmse_train, 
-                                'pre_rmse_test':rmse_test}, step=it)
+            mlflow.log_metrics({'pre_loss': loss_epoch,
+                                'pre_rmse_train': rmse_train,
+                                'pre_rmse_test': rmse_test}, step=it)
 
 
         diffusion = GaussianDiffusion(
             model,
-            cond_pred_model = cond_pred_model,
-            d = d,
-            data_shape = (len(d.train_data[0]), len(d.train_data[0][0]), len(d.train_data[0][0][0])),
-            g = self.g,
-            g_train = self.g_train,
-            g_samp = self.g_samp,
-            image_size = 128,
-            beta_schedule = self.kwargs['beta_schedule'], # 'cosine'
-            timesteps = self.kwargs['diffusion_dteps'],   # number of steps
-            loss_type = self.kwargs['loss_type'],    # L1 or L2
-            objective = self.kwargs['objective']
+            cond_pred_model=cond_pred_model,
+            d=d,
+            data_shape=(len(d.train_data[0]), len(d.train_data[0][0]), len(d.train_data[0][0][0])),
+            g=self.g,
+            g_train=self.g_train,
+            g_samp=self.g_samp,
+            image_size=128,
+            beta_schedule=self.kwargs['beta_schedule'],  # 'cosine'
+            timesteps=self.kwargs['diffusion_dteps'],  # number of steps
+            loss_type=self.kwargs['loss_type'],  # L1 or L2
+            objective=self.kwargs['objective']
         )
         diffusion = diffusion.to(device)
 
-        opt = torch.optim.Adam(diffusion.parameters(), lr = self.lr)
+        opt = torch.optim.Adam(diffusion.parameters(), lr=self.lr)
         if self.dr:
             scheduler = ExponentialLR(opt, self.dr)
 
-        train_data=d.train_data
+        train_data = d.train_data
 
         loss_epoch = []
         print("Starting training...")
@@ -190,9 +192,9 @@ class Experiment:
             if self.dr:
                 scheduler.step()
             mlflow.log_metrics({'train_time': time.time()-start_train,
-                                'loss':np.mean(losses),
+                                'loss': np.mean(losses),
                                 'current_it': it}, step=it)
-            print('loss:%.3f'%np.mean(losses))
+            print('loss:%.3f' % np.mean(losses))
             
 
             # train guidance model
@@ -203,23 +205,23 @@ class Experiment:
                 rmse_test = self.evaluate_guidance_model(cond_pred_model, test_loader)
                 print('rmse train:%.3f'%(rmse_train))
                 print('rmse test:%.3f'%(rmse_test))
-                mlflow.log_metrics({'guide_loss':loss_epoch,
-                                    'rmse_train':rmse_train, 
-                                    'rmse_test':rmse_test}, step=it)
+                mlflow.log_metrics({'guide_loss': loss_epoch,
+                                    'rmse_train': rmse_train,
+                                    'rmse_test': rmse_test}, step=it)
             else:
                 rmse_train = self.evaluate_guidance_model(cond_pred_model, train_loader)
                 rmse_test = self.evaluate_guidance_model(cond_pred_model, test_loader)
                 print('rmse train:%.3f'%(rmse_train))
                 print('rmse test:%.3f'%(rmse_test))
-                mlflow.log_metrics({'rmse_train':rmse_train, 
-                                    'rmse_test':rmse_test}, step=it)
+                mlflow.log_metrics({'rmse_train': rmse_train,
+                                    'rmse_test': rmse_test}, step=it)
 
-            if it in [20,40,60,80,100,200,300,400,500,600,700,800,900,1000,1500,2000]:
+            if it in [20, 40, 60, 80, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000]:
                 sampled_flow = diffusion.sample(sampids, batch_size=self.kwargs['sample_num'])
                 np.savez(archive_path + 'sample_{}.npz'.format(it),
-                        sample = sampled_flow.detach().cpu().numpy())
+                        sample=sampled_flow.detach().cpu().numpy())
                 
-            if it in [200,500,1000,1500,2000]:
+            if it in [200, 500, 1000, 1500, 2000]:
                 # save model
                 torch.save(diffusion.state_dict(), archive_path + "model_{}.pth".format(it))
 
@@ -292,8 +294,8 @@ if __name__ == '__main__':
         seed = args.seed
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        torch.mps.manual_seed(seed)
+        # torch.mps.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 

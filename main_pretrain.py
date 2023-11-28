@@ -20,7 +20,7 @@ import os
 import setproctitle
 setproctitle.setproctitle('TuckER_pretrain@zzl')
 
-device = torch.device('cuda')
+device = torch.device('mps')
 
 class Experiment:
     def __init__(self, lr, edim, batch_size, dr):
@@ -81,8 +81,7 @@ class Experiment:
             mlflow.log_metrics({'train_time': time.time()-start_train, 'loss': loss_epoch[-1], 'current_it': it}, step=it)
 
         E_save=model.E.weight
-        np.savez(archive_path + 'ER.npz',
-                E_pretrain=E_save.detach().cpu().numpy())
+        np.savez(archive_path + 'ER.npz', E_pretrain=E_save.detach().cpu().numpy())
 
 
 if __name__ == '__main__':
@@ -131,8 +130,8 @@ if __name__ == '__main__':
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        torch.mps.manual_seed(seed)
+        # torch.mps.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 

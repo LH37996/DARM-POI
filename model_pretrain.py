@@ -19,7 +19,6 @@ class MyLoss_Pretrain(torch.nn.Module):
         return loss_kge
 
 
-
 class TuckER(torch.nn.Module):
     def __init__(self, d, d1, **kwargs):
         super(TuckER, self).__init__()
