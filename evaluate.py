@@ -112,25 +112,25 @@ def cal_smape(p_pred, p_real, eps=0.00000001):
     out=np.mean(np.abs(p_real - p_pred) / ((np.abs(p_real) + np.abs(p_pred)) / 2 + eps))
     return out
 
-it=500
-pred=np.load(resultpath+"sample_{}_final.npz".format(it))
+it = 500
+pred = np.load(resultpath+"sample_{}_final.npz".format(it))
 
-pred=pred['sample']
-pred=(pred*(M-m)+m+M)/2 
+pred = pred['sample']
+pred = (pred*(M-m)+m+M)/2
 
-pred_flow=np.mean(pred,0)
-rmse=metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
-mae=metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
-smape=cal_smape(pred_flow.flatten(),test_reg_flow.flatten())
+pred_flow = np.mean(pred,0)
+rmse = metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
+mae = metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
+smape = cal_smape(pred_flow.flatten(),test_reg_flow.flatten())
 
 mmd = MaximumMeanDiscrepancy_numpy()
-tmpmmds=[]
+tmpmmds = []
 for i in range(pred.shape[1]):
-    realflow=test_flow[:,i,:,:]
-    genflow=pred[:,i,:,:]
-    data_1=realflow.reshape(realflow.shape[0],-1)
-    data_2=genflow.reshape(genflow.shape[0],-1)
+    realflow = test_flow[:,i,:,:]
+    genflow = pred[:,i,:,:]
+    data_1 = realflow.reshape(realflow.shape[0],-1)
+    data_2 = genflow.reshape(genflow.shape[0],-1)
     tmpmmds.append(mmd(data_1, data_2))
-mmd=np.mean(tmpmmds)
-print('%.2f\t%.2f\t%.2f\t%.2f'%(mae,rmse,smape,mmd))
+mmd = np.mean(tmpmmds)
+print('%.2f\t%.2f\t%.2f\t%.2f' % (mae,rmse,smape,mmd))
 

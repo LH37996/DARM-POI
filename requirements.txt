@@ -1,4 +1,6 @@
-torch==1.9.0
+torch==2.1.0
+torch_sparse
+torch_scatter
 torch_geometric==1.7.2
 numpy==1.21.1
 sklearn

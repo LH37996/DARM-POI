@@ -93,7 +93,16 @@ class Data:
         train_data = np.array(train_data)
         M, m = np.max(train_data), np.min(train_data)
         train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
+        return train_data.tolist(), m, M
 
+        data = pd.read_csv(data_dir+"Florida_visits_2019_2020.csv")
+        filtered_data = data[(data['latitude'] >= min_lat) & (data['latitude'] <= max_lat) &
+                             (data['longitude'] >= min_lon) & (data['longitude'] <= max_lon)]
+        visit_data_columns = filtered_data.columns[6:]  # 提取从2019年1月到2020年12月的访问数据列
+        visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
+        train_data = np.array(visit_data)
+        M, m = np.max(train_data), np.min(train_data)
+        train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
         return train_data.tolist(), m, M
 
     def load_pretrain(self, data_dir):

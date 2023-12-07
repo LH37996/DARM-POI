@@ -242,7 +242,7 @@ if __name__ == '__main__':
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.mps.manual_seed(seed)
-    torch.mps.manual_seed_all(seed)
+    # torch.mps.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
