@@ -83,55 +83,6 @@ def calculate_lat_lon_range(csv_file_path):
     return min_lat, max_lat, min_lon, max_lon
 
 
-def haversine(lon1, lat1, lon2, lat2):
-    """
-    Calculate the great circle distance in kilometers between two points
-    on the earth (specified in decimal degrees)
-    """
-    # Convert decimal degrees to radians
-    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
-
-    # Haversine formula
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    c = 2 * np.arcsin(np.sqrt(a))
-    r = 6371  # Radius of earth in kilometers
-    return c * r
-
-
-def disaster_intensity_mapping(observation_intensity_list, observation_latitude_list, observation_longitude_list,
-                               poi_latitude_list, poi_longitude_list
-                               , s=1, k=1):
-    assert(len(observation_intensity_list) == len(observation_latitude_list) == len(observation_longitude_list))
-    assert(len(poi_latitude_list) == len(poi_longitude_list))
-    """
-    Calculate the intensity at each POI based on the observation data from weather stations.
-    """
-    num_pois = len(poi_latitude_list)
-    num_stations = len(observation_intensity_list)
-
-    # Create a matrix of distances between each POI and each observation station
-    distance_matrix = np.zeros((num_pois, num_stations))
-    for i, (poi_lat, poi_lon) in enumerate(zip(poi_latitude_list, poi_longitude_list)):
-        for j, (obs_lat, obs_lon) in enumerate(zip(observation_latitude_list, observation_longitude_list)):
-            distance_matrix[i, j] = haversine(poi_lon, poi_lat, obs_lon, obs_lat)
-
-    # Inverse distance weighting
-    weight_matrix = 1 / (distance_matrix + 1)
-
-    # Convert observation_intensity_list to a column vector for element-wise multiplication
-    observation_intensity_vector = np.array(observation_intensity_list).reshape(1, num_stations)
-
-    # Element-wise product of weight_matrix and observation_intensity_vector, then sum across columns
-    weighted_intensity = np.sum(weight_matrix * observation_intensity_vector, axis=1)
-
-    # Apply the decay function
-    poi_intensity_list = 1 + (k * weighted_intensity ** s)
-
-    return poi_intensity_list
-
-
 # 示例：绘制POI的访问量变化曲线
 def plot_poi_visitation_curve(r):
     (min_lat, max_lat, min_lon, max_lon) = calculate_lat_lon_range("data/data_florida/wsf2.csv")

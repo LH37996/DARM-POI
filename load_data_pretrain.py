@@ -4,7 +4,7 @@ import json
 
 class Data:
     def __init__(self, data_dir):
-        self.reg2id = self.load_reg(data_dir)
+        # self.reg2id = self.load_reg(data_dir)
         self.ent2id, self.rel2id, self.kg_data = self.load_kg(data_dir)
         self.nreg = len(self.reg2id)
 

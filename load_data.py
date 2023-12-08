@@ -4,11 +4,6 @@ import json
 import datetime
 
 
-def is_weekday(datestr): # 20160101
-    date = datetime.datetime.strptime(datestr, "%Y%m%d")
-    return date.weekday() in [0, 1, 2, 3, 4]
-
-
 class Data:
     def __init__(self, data_dir):
         self.reg2id, self.trainids, self.sampids, self.trainregs, self.sampleregs, self.regfeas = self.load_reg(data_dir)
@@ -24,11 +19,11 @@ class Data:
 
     # Region
     def load_reg(self, data_dir):      
-        with open(data_dir + 'region2info.json', 'r') as f:
-            region2info = json.load(f)
+        # with open(data_dir + 'region2info.json', 'r') as f:
+        #     region2info = json.load(f)
 
-        regions = sorted(region2info.keys(), key=lambda x: x)
-        reg2id = dict([(x, i) for i, x in enumerate(regions)])
+        # regions = sorted(region2info.keys(), key=lambda x: x)
+        # reg2id = dict([(x, i) for i, x in enumerate(regions)])
 
         with open(data_dir + 'train_regs.json', 'r') as f:
             trainregs = json.load(f)
@@ -37,8 +32,8 @@ class Data:
             testregs = json.load(f)
 
         sampregs = testregs
-        trainids = [reg2id[x] for x in trainregs]
-        sampids = [reg2id[x] for x in testregs]
+        trainids = [x for x in trainregs]
+        sampids = [x for x in testregs]
 
         regfeas = []
         for r in regions:
