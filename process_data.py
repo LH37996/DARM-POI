@@ -533,67 +533,33 @@ def get_poi_feature_add_to_csv():
 
 
 def process_kg():
-    # # Load the aggregated_florida_visits.csv file to understand the mapping between region_id and item_id
-    # visits_df = pd.read_csv('data/data_florida/aggregated_florida_visits.csv')
-    #
-    # # Load the kg.txt file to understand its format and structure
-    # with open('data/data_florida/kg_region.txt', 'r') as file:
-    #     kg_region_content = file.readlines()
-    #
-    # # Step 1: Create a mapping from region_id to a list of corresponding item_ids
-    # region_to_item_map = visits_df.groupby('region_id')['item_id'].apply(list).to_dict()
-    # # Step 2 & 3: Process each line in kg.txt and replace region_ids with corresponding item_ids
-    # new_relations = []
-    # for line in kg_region_content:
-    #     region1, relation, region2 = line.strip().split('\t')
-    #     region1 = int(region1)
-    #     region2 = int(region2)
-    #     # Get the corresponding item_ids for each region_id
-    #     item_ids_1 = region_to_item_map.get(region1, [])
-    #     item_ids_2 = region_to_item_map.get(region2, [])
-    #     # Create all possible combinations of item_ids from the two lists
-    #     for item_id_1, item_id_2 in product(item_ids_1, item_ids_2):
-    #         new_relations.append(f"{item_id_1}\t{relation}\t{item_id_2}\n")
-    # # Step 4: Write the new relations to a new file kg.txt
-    # new_file_path = 'data/data_florida/kg.txt'
-    # with open(new_file_path, 'w') as new_file:
-    #     new_file.writelines(new_relations)
+    kg_region_data = pd.read_csv('data/data_florida/kg_region.txt', sep='\t', header=None,
+                                 names=['region_id_1', 'relation', 'region_id_2'])
+    florida_visits_data = pd.read_csv('data/data_florida/aggregated_florida_visits.csv')
 
-    # Load the data from the 'aggregated_florida_visits.csv' file
-    visits_file_path = 'data/data_florida/aggregated_florida_visits.csv'
-    visits_data = pd.read_csv(visits_file_path)
+    # Selecting a representative item_id for each region_id
+    representative_item_ids = florida_visits_data.groupby('region_id')['item_id'].first()
 
-    # 创建 region_id 到 item_id 的映射
-    region_to_item_mapping = visits_data.groupby('region_id')['item_id'].apply(list).to_dict()
-    # 显示映射的前几个元素以进行验证
-    list(region_to_item_mapping.items())[:5]
+    # Replace region_id in kg_region_data with their representative item_id
+    kg_region_data['region_id_1'] = kg_region_data['region_id_1'].map(representative_item_ids)
+    kg_region_data['region_id_2'] = kg_region_data['region_id_2'].map(representative_item_ids)
 
-    # 读取 kg.txt 文件
-    kg_file_path = 'data/data_florida/kg_region.txt'
-    with open(kg_file_path, 'r') as file:
-        kg_lines = file.readlines()
-    # 替换 region_id 为对应的 item_id（注意保留文件结构）
+    # Prepare SameRegion relations
+    same_region_relations = []
+    for region_id, group in florida_visits_data.groupby('region_id'):
+        representative_item_id = representative_item_ids[region_id]
+        for item_id in group['item_id']:
+            if item_id != representative_item_id:
+                same_region_relations.append([item_id, 'SameRegion', representative_item_id])
 
-    expanded_kg_lines = []
-    for line in kg_lines:
-        parts = line.strip().split('\t')  # 使用制表符分割
-        if parts and len(parts) == 3:
-            # 将两边的 region_id 都替换为对应的 item_id 列表
-            region_id_1, relation, region_id_2 = parts
-            item_ids_1 = region_to_item_mapping.get(int(region_id_1), [])
-            item_ids_2 = region_to_item_mapping.get(int(region_id_2), [])
+    # Convert SameRegion relations to DataFrame
+    same_region_df = pd.DataFrame(same_region_relations, columns=['item_id_1', 'relation', 'item_id_2'])
 
-            # 生成所有可能的组合
-            for item_id_1 in item_ids_1:
-                for item_id_2 in item_ids_2:
-                    expanded_line = '\t'.join([str(item_id_1), relation, str(item_id_2)])
-                    expanded_kg_lines.append(expanded_line)
+    # Combine NearBy and SameRegion relations
+    combined_relations = pd.concat(
+        [kg_region_data, same_region_df.rename(columns={'item_id_1': 'region_id_1', 'item_id_2': 'region_id_2'})])
 
-    # 将更新后的内容保存到新文件
-    updated_kg_file_path = 'data/data_florida/kg.txt'
-    with open(updated_kg_file_path, 'w') as file:
-        for line in expanded_kg_lines:
-            file.write(line + '\n')
+    combined_relations.to_csv('kg.txt', sep='\t', header=False, index=False)
 
 
 def replace_region_id_with_item_id(json_file_path, csv_file_path):
@@ -637,7 +603,7 @@ def process_data(lat_delta, long_delta, bs):
 
 
 if __name__ == '__main__':
-    process_data(2, 2, 100)
+    # process_data(2, 2, 100)
 
     # print(len(aggregate_and_plot_visits('data/data_florida/Florida_visits_filtered.csv',
     #                                     lat_delta=0.01, long_delta=0.01, plot=1)))
@@ -664,7 +630,7 @@ if __name__ == '__main__':
 
     # get_poi_feature_add_to_csv()
 
-    # process_kg()
+    process_kg()
 
-    # replace_region_id_with_item_id("data/data_florida/train_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
-    # replace_region_id_with_item_id("data/data_florida/test_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
+    replace_region_id_with_item_id("data/data_florida/train_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
+    replace_region_id_with_item_id("data/data_florida/test_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")

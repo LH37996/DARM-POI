@@ -39,7 +39,7 @@ class Data:
             except KeyError:
                 x = self.nreg
         rel2id = dict([(x, i) for i, x in enumerate(rels)])
-        kg_data = [[x[0], x[1], x[2]] for x in kg_data_str]
+        kg_data = [[x[0], rel2id[x[1]], x[2]] for x in kg_data_str]
         
         return kg_data
     
