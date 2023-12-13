@@ -1,7 +1,8 @@
 import numpy as np
 from collections import defaultdict
 import json
-import datetime
+import pandas as pd
+from ast import literal_eval
 
 
 class Data:
@@ -18,30 +19,37 @@ class Data:
         print('load finished..')
 
     # Region
-    def load_reg(self, data_dir):      
+    def load_reg(self, data_dir):
+        # ORI:
         # with open(data_dir + 'region2info.json', 'r') as f:
         #     region2info = json.load(f)
-
         # regions = sorted(region2info.keys(), key=lambda x: x)
         # reg2id = dict([(x, i) for i, x in enumerate(regions)])
-
         with open(data_dir + 'train_regs.json', 'r') as f:
             trainregs = json.load(f)
-
         with open(data_dir + 'test_regs.json', 'r') as f:
             testregs = json.load(f)
-
         sampregs = testregs
         trainids = [x for x in trainregs]
         sampids = [x for x in testregs]
+        # ORI:
+        # regfeas = []
+        # for r in regions:
+        #     tmp = region2info[r]['feature']
+        #     regfeas.append(tmp)
+        # regfeas = np.array(regfeas, dtype=np.float64)
+        # Load the data from the given file path
+        data = pd.read_csv("data/data_florida/aggregated_florida_visits_with_feature.csv")
+        # Extract the 'feature' column and convert it from string representation of lists to actual lists
+        # We use literal_eval to safely evaluate the string as a Python list
+        data['feature'] = data['feature'].apply(lambda x: list(literal_eval(x)))
+        # Sort the data by 'item_id' to ensure the order
+        data_sorted = data.sort_values(by='item_id')
+        # Extract the features into a list of lists (2D list)
+        regfeas = data_sorted['feature'].tolist()
 
-        regfeas = []
-        for r in regions:
-            tmp = region2info[r]['feature']
-            regfeas.append(tmp)
-        regfeas = np.array(regfeas, dtype=np.float64)
-        
-        return reg2id, trainids, sampids, trainregs, sampregs, regfeas.tolist()
+        # ORI: return reg2id, trainids, sampids, trainregs, sampregs, regfeas.tolist()
+        return trainids, sampids, trainregs, sampregs, regfeas
 
     # Knowledge Graph
     def load_kg(self, data_dir):
@@ -79,22 +87,55 @@ class Data:
 
     # alldayflow.json: day*nreg*nhour(24)*2
     def load_flow(self, data_dir):
-        with open(data_dir+'alldayflow.json', 'r') as f:
-            date2flowmat = json.load(f)
-        train_data = []
-        for k, v in date2flowmat.items():
-            if is_weekday(k):
-                train_data.append(v)
-        train_data = np.array(train_data)
-        M, m = np.max(train_data), np.min(train_data)
-        train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
-        return train_data.tolist(), m, M
+        def create_3d_visit_list(file_path):
+            """
+            Creates a 3D list from the dataframe with the following dimensions:
+            1st Dimension: Based on unique 'bs' values.
+            2nd Dimension: Sorted based on 'item_id' within each 'bs'.
+            3rd Dimension: Monthly visit data from January 2019 to December 2019.
+            """
+            # Filter the dataframe for the year 2019
+            df = pd.read_csv(file_path)
+            columns_of_interest = ['region_id', 'bs', 'item_id'] + [f'2019-{month:02d}' for month in range(1, 13)]
+            filtered_df = df[columns_of_interest]
 
-        data = pd.read_csv(data_dir+"Florida_visits_2019_2020.csv")
-        filtered_data = data[(data['latitude'] >= min_lat) & (data['latitude'] <= max_lat) &
-                             (data['longitude'] >= min_lon) & (data['longitude'] <= max_lon)]
-        visit_data_columns = filtered_data.columns[6:]  # 提取从2019年1月到2020年12月的访问数据列
-        visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
+            # Initialize the 3D list
+            visit_list_3d = []
+
+            # Iterate over each unique 'bs'
+            for bs in filtered_df['bs'].unique():
+                bs_data = filtered_df[filtered_df['bs'] == bs]
+
+                # Sort 'bs_data' by 'item_id' and iterate over each 'item_id'
+                bs_list_2d = []
+                for _, row in bs_data.sort_values(by='item_id').iterrows():
+                    # Extract the monthly visit data and append to the 2D list
+                    monthly_visits = row[3:].tolist()
+                    bs_list_2d.append(monthly_visits)
+
+                # Append the 2D list to the 3D list
+                visit_list_3d.append(bs_list_2d)
+
+            return visit_list_3d
+        # with open(data_dir + 'alldayflow.json', 'r') as f:
+        #     date2flowmat = json.load(f)
+        # train_data = []
+        # for k, v in date2flowmat.items():
+        #     if is_weekday(k):
+        #         train_data.append(v)
+        # train_data = np.array(train_data)
+        # M, m = np.max(train_data), np.min(train_data)
+        # train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
+        # return train_data.tolist(), m, M
+        #
+        # data = pd.read_csv(data_dir+"Florida_visits_2019_2020.csv")
+        # filtered_data = data[(data['latitude'] >= min_lat) & (data['latitude'] <= max_lat) &
+        #                      (data['longitude'] >= min_lon) & (data['longitude'] <= max_lon)]
+        # visit_data_columns = filtered_data.columns[6:]  # 提取从2019年1月到2020年12月的访问数据列
+        # visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
+
+        visit_data = create_3d_visit_list("data/data_florida/aggregated_florida_visits.csv")
+
         train_data = np.array(visit_data)
         M, m = np.max(train_data), np.min(train_data)
         train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]

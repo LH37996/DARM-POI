@@ -2,11 +2,14 @@ import numpy as np
 from collections import defaultdict
 import json
 
+import pandas as pd
+
+
 class Data:
     def __init__(self, data_dir):
         # self.reg2id = self.load_reg(data_dir)
-        self.ent2id, self.rel2id, self.kg_data = self.load_kg(data_dir)
-        self.nreg = len(self.reg2id)
+        self.kg_data = self.load_kg(data_dir)
+        self.nreg = len(pd.read_csv(data_dir + "aggregated_florida_visits"))
 
         print('number of node=%d, number of edge=%d, number of relations=%d' % (len(self.ent2id), len(self.kg_data), len(self.rel2id)))
         print('region num={}'.format(len(self.reg2id)))
@@ -22,7 +25,7 @@ class Data:
         return reg2id
 
     def load_kg(self, data_dir):
-        ent2id, rel2id = self.reg2id.copy(), {}
+        # ent2id, rel2id = self.reg2id.copy(), {}
         kg_data_str = []
         with open(data_dir + 'kg.txt', 'r') as f:
             for line in f.readlines(): 
@@ -32,12 +35,12 @@ class Data:
         rels = sorted(list(set([x[1] for x in kg_data_str])))
         for i, x in enumerate(ents):
             try:
-                ent2id[x]
+                x
             except KeyError:
-                ent2id[x] = len(ent2id)
+                x = self.nreg
         rel2id = dict([(x, i) for i, x in enumerate(rels)])
-        kg_data = [[ent2id[x[0]], rel2id[x[1]], ent2id[x[2]]] for x in kg_data_str]
+        kg_data = [[x[0], x[1], x[2]] for x in kg_data_str]
         
-        return ent2id, rel2id, kg_data
+        return kg_data
     
         

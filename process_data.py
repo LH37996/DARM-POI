@@ -64,7 +64,7 @@ def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1
     return aggregated_df
 
 
-def aggregate_poi_visits(file_path, lat_delta, long_delta):
+def aggregate_poi_visits(file_path, lat_delta, long_delta, bs):
     # 读取数据
     data = pd.read_csv(file_path)
 
@@ -82,9 +82,18 @@ def aggregate_poi_visits(file_path, lat_delta, long_delta):
         np.digitize(data['longitude'], long_bins)
     )
 
-    # 聚合数据
+    # 新逻辑：在每个区域编号内随机均分成bs组
+    def split_into_bs_groups(group):
+        group = group.sample(frac=1).reset_index(drop=True)  # 随机打乱
+        n = len(group)
+        group['bs'] = [i % bs for i in range(n)]  # 为每个数据项分配bs属性
+        return group
+
+    data = data.groupby('region_id').apply(split_into_bs_groups).reset_index(drop=True)
+
+    # 在每个组内按照主要类别聚合数据
     monthly_columns = [col for col in data.columns if col.startswith('20')]
-    aggregated_data = data.groupby(['region_id', 'top_category'])[monthly_columns].sum().reset_index()
+    aggregated_data = data.groupby(['region_id', 'bs', 'top_category'])[monthly_columns].sum().reset_index()
 
     # 计算区域中心
     region_centers = data.groupby('region_id')['latitude', 'longitude'].mean().reset_index()
@@ -605,13 +614,13 @@ def replace_region_id_with_item_id(json_file_path, csv_file_path):
 
 
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
-def process_data(lat_delta, long_delta):
+def process_data(lat_delta, long_delta, bs):
     # Florida_visits_2019_2020.csv -> Florida_visits_filtered.csv
     florida_visits_filter()
 
     # Florida_visits_filtered.csv -> aggregated_florida_visits.csv
     aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
-                         lat_delta, long_delta)
+                         lat_delta, long_delta, bs)
 
     # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
     get_poi_intensity()
@@ -628,13 +637,13 @@ def process_data(lat_delta, long_delta):
 
 
 if __name__ == '__main__':
-    process_data(0.3, 0.3)
+    process_data(2, 2, 100)
 
     # print(len(aggregate_and_plot_visits('data/data_florida/Florida_visits_filtered.csv',
     #                                     lat_delta=0.01, long_delta=0.01, plot=1)))
 
     # aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
-    #                      lat_delta=0.01, long_delta=0.01)
+    #                      lat_delta=3, long_delta=3, bs=100)
 
     # daily_summaries_latest_filter()
 

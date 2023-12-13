@@ -135,7 +135,7 @@ class KGFlowBlock(nn.Module):
         
         self.output_projection = nn.Conv1d(dim, 2 * dim, 1)
 
-    def forward(self, x_in, flowkg, time_emb, cond, KGE): # x:bs*nreg*nhour*trans_dim
+    def forward(self, x_in, flowkg, time_emb, cond, KGE):  # x:bs*nreg*nhour*trans_dim
         bs, nreg, nhour, dim = x_in.shape
         assert self.dim == dim
         x = x_in
@@ -496,7 +496,7 @@ class GaussianDiffusion(nn.Module):
 
         return x_T_mean
 
-    def model_predictions(self, x, sampids, t, x_self_cond = None, clip_x_start = False, mode = 'train'):
+    def model_predictions(self, x, sampids, t, x_self_cond=None, clip_x_start = False, mode = 'train'):
         
         f_phi = self.compute_guiding_prediction(x, sampids)
 
@@ -546,19 +546,19 @@ class GaussianDiffusion(nn.Module):
         return pred_img, x_start
 
     @torch.no_grad()
-    def p_sample_loop(self, sampids, shape): # shape=(bs, nreg, nhour, 2)
+    def p_sample_loop(self, sampids, shape):  # shape=(bs, nreg, nhour, 2)
         batch, device = shape[0], self.betas.device
 
         img = torch.randn(shape, device=device)
 
         # noise sample with predicted mean
-        x_T_mean = self.compute_guiding_prediction(img, sampids) # nreg*1
+        x_T_mean = self.compute_guiding_prediction(img, sampids)  # nreg*1
         assert x_T_mean.shape == shape
         img = img + x_T_mean
 
         x_start = None
 
-        for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
+        for t in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
             self_cond = x_start if self.self_condition else None
             img, x_start = self.p_sample(img, sampids, t, self_cond)
 
