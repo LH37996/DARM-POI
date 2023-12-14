@@ -635,6 +635,38 @@ def replace_region_id_with_item_id(json_file_path):
     return new_json_file_path
 
 
+def generate_train_regs_list(file_path):
+    # Load the dataset
+    data = pd.read_csv(file_path)
+
+    # Filter data
+    train_data = data[data['isTrain'] == 1]
+    test_data = data[data['isTrain'] == 0]
+
+    # Calculate n_train (number of 'isTrain = 1' entries for each 'bs')
+    n_train_min = train_data['bs'].value_counts().min()
+    n_train_max = train_data['bs'].value_counts().max()
+    assert n_train_min == n_train_max
+    n_train = n_train_min
+
+    n_test_min = test_data['bs'].value_counts().min()
+    n_test_max = test_data['bs'].value_counts().max()
+    assert n_test_min == n_test_max
+    n_test = n_test_min
+
+    # Generate the list
+    train_regs_list = list(range(n_train))
+    test_regs_list = list(range(n_train, n_train + n_test))
+
+    # Saving the list to a JSON file
+    output_train_json_path = 'data/data_florida/train_regs.json'
+    output_test_json_path = 'data/data_florida/test_regs.json'
+    with open(output_train_json_path, 'w') as f:
+        json.dump(train_regs_list, f)
+    with open(output_test_json_path, 'w') as f:
+        json.dump(test_regs_list, f)
+
+
 def convert_file_as_bs_order(file_path):
     data = pd.read_csv(file_path)
     def reorder_and_reindex(dataframe, sort_column, reindex_column):
@@ -681,8 +713,7 @@ def process_data(lat_delta, long_delta, bs):
 
     process_kg()
 
-    replace_region_id_with_item_id("data/data_florida/train_regs_region.json")
-    replace_region_id_with_item_id("data/data_florida/test_regs_region.json")
+    generate_train_regs_list("data/data_florida/aggregated_florida_visits.csv")
 
 
 if __name__ == '__main__':
