@@ -192,6 +192,37 @@ def aggregate_poi_visits(file_path, lat_delta, long_delta, bs):
     aggregated_csv_path = 'data/data_florida/aggregated_florida_visits.csv'
     aggregated_data.to_csv(aggregated_csv_path, index=False)
 
+    def drop_data_to_ensure_same_count_of_train_test_ids():
+        data = pd.read_csv('data/data_florida/aggregated_florida_visits.csv')
+        # Step 1: Equalize the count of 'isTrain = 1' for each 'bs'
+        # Filtering the data where isTrain = 1
+        train_data = data[data['isTrain'] == 1]
+        # Finding the minimum count of 'isTrain = 1' for any 'bs'
+        min_train_count = train_data['bs'].value_counts().min()
+        # Sampling the data to ensure equal count for each 'bs'
+        balanced_train_data = train_data.groupby('bs').sample(n=min_train_count, random_state=1)
+        # Step 2: Equalize the count of 'isTrain = 0' for each 'bs'
+        # Filtering the data where isTrain = 0
+        test_data = data[data['isTrain'] == 0]
+        # Finding the minimum count of 'isTrain = 0' for any 'bs'
+        min_test_count = test_data['bs'].value_counts().min()
+        # Sampling the data to ensure equal count for each 'bs'
+        balanced_test_data = test_data.groupby('bs').sample(n=min_test_count, random_state=1)
+        # Step 3: Concatenate the balanced datasets and sort them
+        # Concatenating the balanced datasets
+        balanced_data = pd.concat([balanced_train_data, balanced_test_data])
+        # Sorting the data first by 'bs' and then by 'isTrain'
+        sorted_data = balanced_data.sort_values(by=['bs', 'isTrain'], ascending=[True, False])
+        # Resetting the index for the sorted data
+        sorted_data.reset_index(drop=True, inplace=True)
+        # Step 4: Resetting the 'item_id' attribute
+        # Resetting the 'item_id' starting from 0
+        sorted_data['item_id'] = np.arange(len(sorted_data))
+        output_file_path = 'data/data_florida/aggregated_florida_visits.csv'
+        sorted_data.to_csv(output_file_path, index=False)
+
+    drop_data_to_ensure_same_count_of_train_test_ids()
+
     # 记录相邻区域信息
     region_ids = aggregated_data['region_id'].unique()
     with open('data/data_florida/kg_region.txt', 'w') as f:
