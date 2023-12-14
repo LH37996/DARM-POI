@@ -40,7 +40,7 @@ class Experiment:
 
     def get_batch(self, er_vocab, er_vocab_pairs, idx):
         batch = er_vocab_pairs[idx:idx + self.batch_size]
-        targets = torch.zeros((len(batch), len(d.ent2id)), device=device)
+        targets = torch.zeros((len(batch), d.nreg), device=device)
         for idx, pair in enumerate(batch):
             targets[idx, er_vocab[pair]] = 1.
         return torch.tensor(batch, dtype=torch.long, device=device), targets

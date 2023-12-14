@@ -8,11 +8,11 @@ import pandas as pd
 class Data:
     def __init__(self, data_dir):
         # self.reg2id = self.load_reg(data_dir)
-        self.kg_data = self.load_kg(data_dir)
-        self.nreg = len(pd.read_csv(data_dir + "aggregated_florida_visits"))
+        self.kg_data, self.rel2id = self.load_kg(data_dir)
+        self.nreg = len(pd.read_csv(data_dir + "aggregated_florida_visits.csv"))
 
-        print('number of node=%d, number of edge=%d, number of relations=%d' % (len(self.ent2id), len(self.kg_data), len(self.rel2id)))
-        print('region num={}'.format(len(self.reg2id)))
+        print('number of node=%d, number of edge=%d, number of relations=%d' % (self.nreg, len(self.kg_data), len(self.rel2id)))
+        print('region num={}'.format(self.nreg))
         print('load finished..')
 
     def load_reg(self, data_dir):      
@@ -39,8 +39,8 @@ class Data:
             except KeyError:
                 x = self.nreg
         rel2id = dict([(x, i) for i, x in enumerate(rels)])
-        kg_data = [[x[0], rel2id[x[1]], x[2]] for x in kg_data_str]
+        kg_data = [[int(x[0]), rel2id[x[1]], int(x[2])] for x in kg_data_str]
         
-        return kg_data
+        return kg_data, rel2id
     
         

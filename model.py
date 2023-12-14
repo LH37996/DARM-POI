@@ -220,11 +220,11 @@ class KGFlow(nn.Module):
     def __init__(self, d, **kwargs):
         super(KGFlow, self).__init__()
         self.nreg = d.nreg
-        ne = len(d.ent2id)
+        # ne = len(d.ent2id)
         nr = len(d.rel2id)
         self.num_rgcns = kwargs['num_rgcns']
         self.num_sas = kwargs['num_sas']
-        self.flow_channels = len(d.train_data[0][0][0])
+        self.flow_channels = 1
 
         fea_dim = d.features.shape[1]
 

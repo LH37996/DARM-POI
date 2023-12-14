@@ -82,22 +82,107 @@ def aggregate_poi_visits(file_path, lat_delta, long_delta, bs):
         np.digitize(data['longitude'], long_bins)
     )
 
-    # 新逻辑：在每个区域编号内随机均分成bs组
-    def split_into_bs_groups(group):
-        group = group.sample(frac=1).reset_index(drop=True)  # 随机打乱
-        n = len(group)
-        group['bs'] = [i % bs for i in range(n)]  # 为每个数据项分配bs属性
-        return group
+    # 计算每个区域编号对应区域中心的经纬度
+    region_centers = data.groupby('region_id')[['latitude', 'longitude']].mean().reset_index()
+    region_centers.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
 
-    data = data.groupby('region_id').apply(split_into_bs_groups).reset_index(drop=True)
+    def get_train_test(unique_regions):
+        coordinates = unique_regions[['center_latitude', 'center_longitude']].values
+
+        # 仍然使用两个聚类
+        n_clusters = 2
+
+        # 应用 KMeans 聚类
+        kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(coordinates)
+        unique_regions['cluster'] = kmeans.labels_
+
+        # 根据聚类结果调整训练集和测试集的大小
+        cluster_counts = unique_regions['cluster'].value_counts()
+        larger_cluster = cluster_counts.idxmax()
+        smaller_cluster = 1 - larger_cluster
+
+        # 将较大的聚类分配给训练集，较小的聚类分配给测试集
+        train_regions = unique_regions[unique_regions['cluster'] == larger_cluster]['region_id'].tolist()
+        test_regions = unique_regions[unique_regions['cluster'] == smaller_cluster]['region_id'].tolist()
+
+        # 如果训练集大小不是测试集的大约三倍，则进行调整
+        while len(train_regions) < 3 * len(test_regions):
+            # 从测试集中移动一些区域到训练集
+            train_regions.append(test_regions.pop())
+
+        # Saving the region IDs to JSON files
+        train_regions_file = 'data/data_florida/train_regs_region.json'
+        test_regions_file = 'data/data_florida/test_regs_region.json'
+
+        with open(train_regions_file, 'w') as file:
+            json.dump(train_regions, file)
+
+        with open(test_regions_file, 'w') as file:
+            json.dump(test_regions, file)
+
+        # Plotting the regions
+        plt.figure(figsize=(10, 6))
+
+        # Plotting training regions
+        train_coords = unique_regions[unique_regions['region_id'].isin(train_regions)][
+            ['center_latitude', 'center_longitude']]
+        plt.scatter(train_coords['center_longitude'], train_coords['center_latitude'], color='blue',
+                    label='Training Regions')
+
+        # Plotting testing regions
+        test_coords = unique_regions[unique_regions['region_id'].isin(test_regions)][
+            ['center_latitude', 'center_longitude']]
+        plt.scatter(test_coords['center_longitude'], test_coords['center_latitude'], color='red',
+                    label='Testing Regions')
+
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.title('Geographical Distribution of Regions in Florida (Training vs Testing)')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    # 在 split_and_balance_groups 函数之前获取 unique_regions
+    unique_regions = region_centers[['region_id', 'center_latitude', 'center_longitude']].drop_duplicates()
+
+    get_train_test(unique_regions)
+
+    # 读取训练和测试区域的编号
+    with open("data/data_florida/train_regs_region.json", 'r') as file:
+        train_regs = json.load(file)
+    with open("data/data_florida/test_regs_region.json", 'r') as file:
+        test_regs = json.load(file)
+
+    # 为每个数据点增加isTrain属性
+    data['isTrain'] = data['region_id'].apply(lambda x: 1 if x in train_regs else 0)
+
+    # 新逻辑：根据训练区域的数据分组
+    def split_and_balance_groups(group):
+        # 分离训练和测试数据
+        train_group = group[group['isTrain'] == 1]
+        test_group = group[group['isTrain'] == 0]
+
+        # 分别对训练和测试数据进行分组
+        for sub_group in [train_group, test_group]:
+            total_size = len(sub_group)
+            sizes = np.array([total_size // bs] * bs)
+            sizes[:total_size % bs] += 1
+            indices = np.repeat(range(bs), sizes)
+            np.random.shuffle(indices)
+            sub_group['bs'] = indices[:total_size]
+
+        # 合并训练和测试数据回到原始组
+        return pd.concat([train_group, test_group]).sample(frac=1)  # 随机打乱顺序
+
+    data = data.groupby('region_id').apply(split_and_balance_groups).reset_index(drop=True)
 
     # 在每个组内按照主要类别聚合数据
     monthly_columns = [col for col in data.columns if col.startswith('20')]
     aggregated_data = data.groupby(['region_id', 'bs', 'top_category'])[monthly_columns].sum().reset_index()
 
-    # 计算区域中心
-    region_centers = data.groupby('region_id')['latitude', 'longitude'].mean().reset_index()
+    # 将区域中心的经纬度和isTrain属性合并进aggregated_data
     aggregated_data = pd.merge(aggregated_data, region_centers, on='region_id')
+    aggregated_data = pd.merge(aggregated_data, data[['region_id', 'isTrain']].drop_duplicates(), on='region_id')
 
     # 重命名列和重新编号数据项
     aggregated_data.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
@@ -115,8 +200,6 @@ def aggregate_poi_visits(file_path, lat_delta, long_delta, bs):
                 # 判断区域是否相邻
                 if abs(rid1 // 1000 - rid2 // 1000) <= 1 and abs(rid1 % 1000 - rid2 % 1000) <= 1:
                     f.write(f"{rid1}\tNearBy\t{rid2}\n")
-
-    return aggregated_csv_path, 'data/data_florida/kg_region.txt'
 
 
 def daily_summaries_latest_filter():
@@ -264,64 +347,6 @@ def florida_visits_filter():
     filtered_file_path = 'data/data_florida/Florida_visits_filtered.csv'
     # Save the filtered data to a new CSV file
     filtered_florida_visits.to_csv(filtered_file_path, index=False)
-
-
-def get_train_test():
-    # Load the provided CSV file
-    file_path = 'data/data_florida/aggregated_florida_visits.csv'
-    florida_data = pd.read_csv(file_path)
-
-    # Display the first few rows of the dataframe to understand its structure
-    florida_data.head()
-
-    # Extracting unique region ids and their corresponding latitudes and longitudes
-    unique_regions = florida_data[['region_id', 'center_latitude', 'center_longitude']].drop_duplicates()
-    region_ids = unique_regions['region_id'].values
-    coordinates = unique_regions[['center_latitude', 'center_longitude']].values
-
-    # Determining the number of clusters for KMeans (ideally 2 clusters for training and testing)
-    n_clusters = 2
-
-    # Applying KMeans clustering based on geographic coordinates
-    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(coordinates)
-    unique_regions['cluster'] = kmeans.labels_
-
-    # Separating the regions into two groups based on the clustering
-    train_regions = unique_regions[unique_regions['cluster'] == 0]['region_id'].tolist()
-    test_regions = unique_regions[unique_regions['cluster'] == 1]['region_id'].tolist()
-
-    # Saving the region IDs to JSON files
-    train_regions_file = 'data/data_florida/train_regs_region.json'
-    test_regions_file = 'data/data_florida/test_regs_region.json'
-
-    with open(train_regions_file, 'w') as file:
-        json.dump(train_regions, file)
-
-    with open(test_regions_file, 'w') as file:
-        json.dump(test_regions, file)
-
-    # Plotting the regions
-    plt.figure(figsize=(10, 6))
-
-    # Plotting training regions
-    train_coords = unique_regions[unique_regions['region_id'].isin(train_regions)][
-        ['center_latitude', 'center_longitude']]
-    plt.scatter(train_coords['center_longitude'], train_coords['center_latitude'], color='blue',
-                label='Training Regions')
-
-    # Plotting testing regions
-    test_coords = unique_regions[unique_regions['region_id'].isin(test_regions)][
-        ['center_latitude', 'center_longitude']]
-    plt.scatter(test_coords['center_longitude'], test_coords['center_latitude'], color='red', label='Testing Regions')
-
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.title('Geographical Distribution of Regions in Florida (Training vs Testing)')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    train_regions_file, test_regions_file, train_regions, test_regions
 
 
 def process_weather_data_to_list(folder_path):
@@ -559,14 +584,14 @@ def process_kg():
     combined_relations = pd.concat(
         [kg_region_data, same_region_df.rename(columns={'item_id_1': 'region_id_1', 'item_id_2': 'region_id_2'})])
 
-    combined_relations.to_csv('kg.txt', sep='\t', header=False, index=False)
+    combined_relations.to_csv('data/data_florida/kg.txt', sep='\t', header=False, index=False)
 
 
-def replace_region_id_with_item_id(json_file_path, csv_file_path):
+def replace_region_id_with_item_id(json_file_path):
+    csv_file_path = "data/data_florida/aggregated_florida_visits.csv"
     # Step 1: Read the JSON file to get the list of region_ids
     with open(json_file_path, 'r') as file:
         region_ids = json.load(file)
-
     # Step 2: Read the CSV file and create a mapping from region_id to item_id
     florida_data = pd.read_csv(csv_file_path)
     region_to_item = florida_data.groupby('region_id')['item_id'].apply(list).to_dict()
@@ -579,6 +604,32 @@ def replace_region_id_with_item_id(json_file_path, csv_file_path):
     return new_json_file_path
 
 
+def convert_file_as_bs_order(file_path):
+    data = pd.read_csv(file_path)
+    def reorder_and_reindex(dataframe, sort_column, reindex_column):
+        """
+        Reorder the dataframe based on the values in sort_column (ascending).
+        When values in sort_column are equal, original order is preserved.
+        Reindex the reindex_column starting from 0.
+
+        :param dataframe: Pandas DataFrame to be processed.
+        :param sort_column: Column name (str) to sort by.
+        :param reindex_column: Column name (str) to reindex.
+        :return: Processed DataFrame.
+        """
+        # Sort the dataframe by the specified column, keeping the original order when values are the same
+        sorted_df = dataframe.sort_values(by=sort_column, kind='mergesort')
+
+        # Reindex the specified column starting from 0
+        sorted_df[reindex_column] = range(len(sorted_df))
+
+        return sorted_df
+
+    # Apply the function to the data
+    sorted_data = reorder_and_reindex(data, 'bs', 'item_id')
+    sorted_data.to_csv(file_path, index=False)
+
+
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
 def process_data(lat_delta, long_delta, bs):
     # Florida_visits_2019_2020.csv -> Florida_visits_filtered.csv
@@ -588,22 +639,23 @@ def process_data(lat_delta, long_delta, bs):
     aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
                          lat_delta, long_delta, bs)
 
+    # aggregated_florida_visits.csv -> aggregated_florida_visits.csv
+    convert_file_as_bs_order("data/data_florida/aggregated_florida_visits.csv")
+
     # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
     get_poi_intensity()
 
     # aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
     get_poi_feature_add_to_csv()
 
-    get_train_test()
-
     process_kg()
 
-    replace_region_id_with_item_id("data/data_florida/train_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
-    replace_region_id_with_item_id("data/data_florida/test_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
+    replace_region_id_with_item_id("data/data_florida/train_regs_region.json")
+    replace_region_id_with_item_id("data/data_florida/test_regs_region.json")
 
 
 if __name__ == '__main__':
-    # process_data(2, 2, 100)
+    process_data(2, 2, 100)
 
     # print(len(aggregate_and_plot_visits('data/data_florida/Florida_visits_filtered.csv',
     #                                     lat_delta=0.01, long_delta=0.01, plot=1)))
@@ -630,7 +682,7 @@ if __name__ == '__main__':
 
     # get_poi_feature_add_to_csv()
 
-    process_kg()
-
-    replace_region_id_with_item_id("data/data_florida/train_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
-    replace_region_id_with_item_id("data/data_florida/test_regs_region.json", "data/data_florida/aggregated_florida_visits.csv")
+    # process_kg()
+    #
+    # replace_region_id_with_item_id("data/data_florida/train_regs_region.json")
+    # replace_region_id_with_item_id("data/data_florida/test_regs_region.json")

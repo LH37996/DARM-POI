@@ -24,7 +24,7 @@ class TuckER(torch.nn.Module):
         super(TuckER, self).__init__()
         d2 = d1
         device = kwargs['device']
-        self.E = torch.nn.Embedding(len(d.ent2id), d1)
+        self.E = torch.nn.Embedding(d.nreg, d1)
         self.R = torch.nn.Embedding(len(d.rel2id), d2)
         self.init()
         self.W = torch.nn.Parameter(torch.tensor(np.random.uniform(-1, 1, (d2, d1, d1)), dtype=torch.float, requires_grad=True))
