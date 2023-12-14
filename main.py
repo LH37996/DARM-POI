@@ -72,27 +72,27 @@ class Experiment:
 
         return g, g_train, g_samp
 
-    def extract_batch(trainids, start, interval):
-        """
-        Extracts a batch of items from the trainids list.
-        Parameters:
-        trainids (list): The list from which to extract items.
-        start (int): The starting index for extraction.
-        interval (int): The number of items to extract.
-        Returns:
-        list: A new list containing the extracted items.
-        """
-        # Ensure the start and interval are within the bounds of the trainids list
-        if start < 0 or start >= len(trainids) or start + interval > len(trainids):
-            raise ValueError("Start or interval out of bounds")
-        # Extract the specified range from the list
-        batch_trainids = trainids[start:start + interval]
-        return batch_trainids
+    # def extract_batch(trainids, start, interval):
+    #     """
+    #     Extracts a batch of items from the trainids list.
+    #     Parameters:
+    #     trainids (list): The list from which to extract items.
+    #     start (int): The starting index for extraction.
+    #     interval (int): The number of items to extract.
+    #     Returns:
+    #     list: A new list containing the extracted items.
+    #     """
+    #     # Ensure the start and interval are within the bounds of the trainids list
+    #     if start < 0 or start >= len(trainids) or start + interval > len(trainids):
+    #         raise ValueError("Start or interval out of bounds")
+    #     # Extract the specified range from the list
+    #     batch_trainids = trainids[start:start + interval]
+    #     return batch_trainids
 
     def get_batch(self, train_data, trainids, idx):
         batch = train_data[idx:idx + self.batch_size]
         out = torch.tensor(batch, dtype=torch.float, device=device)  # bs*nreg*nhour*2
-        trainids = self.extract_batch(trainids, idx, self.batch_size)
+        # trainids = self.extract_batch(trainids, idx, self.batch_size)
         out = out[:, trainids, :, :]
         return out
 

@@ -145,6 +145,11 @@ class Data:
                     inner_list.append(mean_values)
             return outer_list, np.array(outer_list).shape[1]
 
+        def to_four_dimensions(three_dim_list):
+            # 通过列表推导式遍历每个元素，并将其转换成一个新的列表
+            return [[[[element] for element in inner_list] for inner_list in outer_list] for outer_list in
+                    three_dim_list]
+
         # with open(data_dir + 'alldayflow.json', 'r') as f:
         #     date2flowmat = json.load(f)
         # train_data = []
@@ -163,7 +168,7 @@ class Data:
         # visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
 
         visit_data, socall_nreg = create_three_dimensional_visit_list("data/data_florida/aggregated_florida_visits.csv")
-
+        visit_data = to_four_dimensions(visit_data)
         train_data = np.array(visit_data)
         M, m = np.max(train_data), np.min(train_data)
         train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
