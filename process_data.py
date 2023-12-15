@@ -571,7 +571,7 @@ def get_poi_feature_add_to_csv():
     data = pd.read_csv(file_path)
 
     # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
-    average_visits = data[['2020-01', '2020-02', '2020-03']].mean(axis=1)
+    average_visits = data[['2019-01', '2019-02', '2019-03', '2019-04', '2019-05', '2019-06', '2019-07', '2019-08']].mean(axis=1)
 
     # Step 2: Normalize the average visits and the Intensity
     normalized_visits = (average_visits - average_visits.min()) / (average_visits.max() - average_visits.min())

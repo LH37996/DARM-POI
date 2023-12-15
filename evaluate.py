@@ -6,17 +6,17 @@ from sklearn import metrics
 import warnings
 warnings.filterwarnings('ignore')
 
-dataset='nyc' ##################### modify the dataset here
+dataset='florida' ##################### modify the dataset here
 filepath='./data/data_{}/'.format(dataset)  
 resultpath = './output/output_{}/'.format(dataset)
 assert os.path.exists(resultpath)
 
 
-with open(filepath+"region2info.json",'r') as f:
-    region2info=json.load(f)
-regions=sorted(region2info.keys(),key=lambda x:x)
-reg2id=dict([(x,i) for i,x in enumerate(regions)])
-region2info=dict([(k,region2info[k]) for k in regions])
+# with open(filepath+"region2info.json",'r') as f:
+#     region2info = json.load(f)
+# regions = sorted(region2info.keys(), key=lambda x: x)
+# reg2id = dict([(x, i) for i, x in enumerate(regions)])
+# region2info = dict([(k, region2info[k]) for k in regions])
 
 
 class MaximumMeanDiscrepancy_numpy(object):

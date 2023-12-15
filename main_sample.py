@@ -26,7 +26,7 @@ from model import KGFlow, GaussianDiffusion, DeterministicFeedForwardNeuralNetwo
 import setproctitle
 setproctitle.setproctitle('sample@zzl')
 
-device = torch.device('mps')
+device = torch.device('cuda')
 
 class MyDataset(Dataset):
     def __init__(self, x, y):

@@ -121,7 +121,7 @@ class Data:
             # Load the data
             data = pd.read_csv(file_path)
             # Select the relevant columns for visits
-            columns_of_interest = ['bs', 'item_id'] + [f'2019-{month:02d}' for month in range(1, 13)]
+            columns_of_interest = ['bs', 'item_id'] + [f'2019-{month:02d}' for month in range(9, 13)]
             data = data[columns_of_interest]
             # Group by 'bs' and process each group
             grouped_data = data.groupby('bs')

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from tqdm.auto import tqdm
 from torch_geometric.data import Data as geoData
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch_geometric.nn import RGCNConv
 from torch.nn.init import xavier_normal_
 
