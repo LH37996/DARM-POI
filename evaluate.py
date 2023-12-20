@@ -4,19 +4,13 @@ import numpy as np
 import datetime
 from sklearn import metrics
 import warnings
+import pandas as pd
 warnings.filterwarnings('ignore')
 
 dataset='florida' ##################### modify the dataset here
-filepath='./data/data_{}/'.format(dataset)  
+filepath='./data/data_{}/'.format(dataset)
 resultpath = './output/output_{}/'.format(dataset)
 assert os.path.exists(resultpath)
-
-
-# with open(filepath+"region2info.json",'r') as f:
-#     region2info = json.load(f)
-# regions = sorted(region2info.keys(), key=lambda x: x)
-# reg2id = dict([(x, i) for i, x in enumerate(regions)])
-# region2info = dict([(k, region2info[k]) for k in regions])
 
 
 class MaximumMeanDiscrepancy_numpy(object):
@@ -77,21 +71,48 @@ class MaximumMeanDiscrepancy_numpy(object):
         return loss
 
 
-with open(filepath + "alldayflow.json",'r') as f:
-    alldayflow=json.load(f)
+file_path = 'data/data_florida/aggregated_florida_visits.csv'
+florida_visits_df = pd.read_csv(file_path)
 
-def is_weekday(datestr): # 20160101
-    date=datetime.datetime.strptime(datestr, "%Y%m%d")
-    return date.weekday() in [0,1,2,3,4]
+def extract_monthly_data(df, year, months):
+    """
+    Extracts data for specific months of a given year from a dataframe.
 
-allday_data=[]
-for k,v in alldayflow.items():
-    if is_weekday(k):
-        allday_data.append(v)
+    :param df: DataFrame containing the data.
+    :param year: The specific year (e.g., 2019).
+    :param months: List of months (integers) to extract data for.
+    :return: A 2D list where each outer list item is a row from the dataframe,
+             and the inner list contains data for the specified months.
+    """
+    # Construct column names for the specified months
+    month_columns = [f"{year}-{str(month).zfill(2)}" for month in months]
+
+    # Extract the relevant columns
+    extracted_data = df[month_columns].values.tolist()
+
+    return extracted_data
+
+extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 12])
+socall_nreg = len(extracted_2019_data)
+three_dim_list = []
+for i in range(20):
+    three_dim_list.append(extracted_2019_data)
+def to_four_dimensions(three_dim_list):
+        # 通过列表推导式遍历每个元素，并将其转换成一个新的列表
+        return [[[[element] for element in inner_list] for inner_list in outer_list] for outer_list in
+                three_dim_list]
+
+
+allday_data = to_four_dimensions(three_dim_list)
+
+print(allday_data)
+
 allday_data=np.array(allday_data)
 
 M=np.max(allday_data)
 m=np.min(allday_data)
+
+# allday_data = (2 * allday_data - m - M) / (M - m)  # 归一化到 [-1, 1]
 
 allday_flow=np.mean(allday_data,0)
 
@@ -100,9 +121,9 @@ with open(filepath + 'train_regs.json', 'r') as f:
     trainregs = json.load(f)
 with open(filepath + 'test_regs.json', 'r') as f:
     testregs = json.load(f)
-    
-trainids = [reg2id[x] for x in trainregs]
-sampids = [reg2id[x] for x in testregs]
+
+trainids = [x for x in trainregs]
+sampids = [x for x in testregs]
 
 test_reg_flow = allday_flow[sampids,:,:]
 test_flow = allday_data[:,sampids,:,:]
@@ -112,25 +133,24 @@ def cal_smape(p_pred, p_real, eps=0.00000001):
     out=np.mean(np.abs(p_real - p_pred) / ((np.abs(p_real) + np.abs(p_pred)) / 2 + eps))
     return out
 
-it = 500
-pred = np.load(resultpath+"sample_{}_final.npz".format(it))
+it=500
+pred=np.load(resultpath+"sample_{}_final.npz".format(it))
 
-pred = pred['sample']
-pred = (pred*(M-m)+m+M)/2
+pred=pred['sample']
+pred=(pred*(M-m)+m+M)/2
 
-pred_flow = np.mean(pred,0)
-rmse = metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
-mae = metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
-smape = cal_smape(pred_flow.flatten(),test_reg_flow.flatten())
+pred_flow=np.mean(pred,0)
+rmse=metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
+mae=metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
+smape=cal_smape(pred_flow.flatten(),test_reg_flow.flatten())
 
 mmd = MaximumMeanDiscrepancy_numpy()
-tmpmmds = []
+tmpmmds=[]
 for i in range(pred.shape[1]):
-    realflow = test_flow[:,i,:,:]
-    genflow = pred[:,i,:,:]
-    data_1 = realflow.reshape(realflow.shape[0],-1)
-    data_2 = genflow.reshape(genflow.shape[0],-1)
+    realflow=test_flow[:,i,:,:]
+    genflow=pred[:,i,:,:]
+    data_1=realflow.reshape(realflow.shape[0],-1)
+    data_2=genflow.reshape(genflow.shape[0],-1)
     tmpmmds.append(mmd(data_1, data_2))
-mmd = np.mean(tmpmmds)
-print('%.2f\t%.2f\t%.2f\t%.2f' % (mae,rmse,smape,mmd))
-
+mmd=np.mean(tmpmmds)
+print('%.2f\t%.2f\t%.2f\t%.2f'%(mae,rmse,smape,mmd))

@@ -117,33 +117,60 @@ class Data:
         #
         #     return visit_list_3d
 
-        def create_three_dimensional_visit_list(file_path):
-            # Load the data
-            data = pd.read_csv(file_path)
-            # Select the relevant columns for visits
-            columns_of_interest = ['bs', 'item_id'] + [f'2019-{month:02d}' for month in range(9, 13)]
-            data = data[columns_of_interest]
-            # Group by 'bs' and process each group
-            grouped_data = data.groupby('bs')
-            # Initialize the outer list (for each 'bs')
-            outer_list = []
-            for bs, group in grouped_data:
-                # Sort the group by 'item_id'
-                group_sorted = group.sort_values('item_id')
-                # Extract only the monthly visit data as a list of lists (excluding 'bs' and 'item_id')
-                inner_lists = group_sorted.iloc[:, 2:].values.tolist()
-                # Append to the outer list
-                outer_list.append(inner_lists)
-            # Find the max length of the inner lists across all 'bs' groups
-            max_length = max(len(inner_list) for inner_list in outer_list)
-            # Ensure each inner list is of equal length, filling with mean values if necessary
-            for inner_list in outer_list:
-                while len(inner_list) < max_length:
-                    # Calculate mean values for each month across existing items
-                    mean_values = [np.nanmean([items[i] for items in inner_list]) for i in range(12)]
-                    # Insert a new item with the mean values
-                    inner_list.append(mean_values)
-            return outer_list, np.array(outer_list).shape[1]
+        # def create_three_dimensional_visit_list(file_path):
+        #     # Load the data
+        #     data = pd.read_csv(file_path)
+        #     # Select the relevant columns for visits
+        #     columns_of_interest = ['item_id'] + [f'2019-{month:02d}' for month in range(9, 13)]
+        #     # Initialize the outer list (for each 'bs')
+        #     outer_list = []
+        #     for group in data:
+        #         # Sort the group by 'item_id'
+        #         group_sorted = group.sort_values('item_id')
+        #         # Extract only the monthly visit data as a list of lists (excluding 'bs' and 'item_id')
+        #         inner_lists = group_sorted.iloc[:, 2:].values.tolist()
+        #         # Append to the outer list
+        #         outer_list.append(inner_lists)
+        #     # Find the max length of the inner lists across all 'bs' groups
+        #     max_length = max(len(inner_list) for inner_list in outer_list)
+        #     # Ensure each inner list is of equal length, filling with mean values if necessary
+        #     for inner_list in outer_list:
+        #         while len(inner_list) < max_length:
+        #             # Calculate mean values for each month across existing items
+        #             mean_values = [np.nanmean([items[i] for items in inner_list]) for i in range(12)]
+        #             # Insert a new item with the mean values
+        #             inner_list.append(mean_values)
+        #     return outer_list, np.array(outer_list).shape[1]
+
+        # Load the CSV file
+        file_path = 'data/data_florida/aggregated_florida_visits.csv'
+        florida_visits_df = pd.read_csv(file_path)
+        def extract_monthly_data(df, year, months):
+            """
+            Extracts data for specific months of a given year from a dataframe.
+
+            :param df: DataFrame containing the data.
+            :param year: The specific year (e.g., 2019).
+            :param months: List of months (integers) to extract data for.
+            :return: A 2D list where each outer list item is a row from the dataframe,
+                     and the inner list contains data for the specified months.
+            """
+            # Construct column names for the specified months
+            month_columns = [f"{year}-{str(month).zfill(2)}" for month in months]
+
+            # Extract the relevant columns
+            extracted_data = df[month_columns].values.tolist()
+
+            return extracted_data
+
+        extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 12])
+
+        socall_nreg = len(extracted_2019_data)
+
+        three_dim_list = []
+
+        for i in range(20):
+            three_dim_list.append(extracted_2019_data)
 
         def to_four_dimensions(three_dim_list):
             # 通过列表推导式遍历每个元素，并将其转换成一个新的列表
@@ -167,8 +194,7 @@ class Data:
         # visit_data_columns = filtered_data.columns[6:]  # 提取从2019年1月到2020年12月的访问数据列
         # visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
 
-        visit_data, socall_nreg = create_three_dimensional_visit_list("data/data_florida/aggregated_florida_visits.csv")
-        visit_data = to_four_dimensions(visit_data)
+        visit_data = to_four_dimensions(three_dim_list)
         train_data = np.array(visit_data)
         M, m = np.max(train_data), np.min(train_data)
         train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]

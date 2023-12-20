@@ -6,8 +6,8 @@ from itertools import product
 
 
 def load_flow_test_florida():
-    data = pd.read_csv("data/data_florida/Florida_visits_2019_2020.csv")
-    visit_data_columns = data.columns[6:]  # 提取从2019年1月到2020年12月的访问数据列
+    data = pd.read_csv("data/data_florida/aggregated_florida_visits.csv")
+    visit_data_columns = data.columns[2:26]  # 提取从2019年1月到2020年12月的访问数据列
     # category_columns = data.columns[2: 3]
     visit_data = data[visit_data_columns].values.tolist()  # 将访问数据转换为二维列表
     # category = data[category_columns].values.tolist()
@@ -86,9 +86,9 @@ def calculate_lat_lon_range(csv_file_path):
 # 示例：绘制POI的访问量变化曲线
 def plot_poi_visitation_curve(r):
     (min_lat, max_lat, min_lon, max_lon) = calculate_lat_lon_range("data/data_florida/wsf2.csv")
-    data, category = load_flow_test_florida(min_lat, max_lat, min_lon, max_lon)
+    data = load_flow_test_florida()
     plot_visit_curve(r, data)
-    print(category[r])
+    # print(category[r])
 
 
 def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1):
@@ -188,16 +188,18 @@ def aggregate_poi_visits(file_path, lat_delta, long_delta):
     return aggregated_csv_path, '/mnt/data/kg.txt'
 
 
+
 if __name__ == "__main__":
-    # plot_poi_visitation_curve(603)
+    plot_poi_visitation_curve(603)
 
     # print(len(aggregate_and_plot_visits('data/data_florida/Florida_visits_filtered.csv',
-    #                                     lat_delta=0.01, long_delta=0.01, plot=1)))
+    #                                     lat_delta=0.1, long_delta=0.1, plot=1)))
 
     # Example usage of the function
-    aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
-                         lat_delta=0.01, long_delta=0.01)
+    # aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
+    #                      lat_delta=0.01, long_delta=0.01)
 
     # print(load_flow_test_florida()[317687])
+    # print(len([[1,2,3],[4,5,6]]))
 
 
