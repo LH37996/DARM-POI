@@ -239,7 +239,7 @@ class Experiment:
                 np.savez(archive_path + 'sample_{}.npz'.format(it),
                         sample=sampled_flow.detach().cpu().numpy())
                 
-            if it in [200, 500, 1000, 1500, 2000]:
+            if it in [60, 200, 500, 1000, 1500, 2000]:
                 # save model
                 torch.save(diffusion.state_dict(), archive_path + "model_{}.pth".format(it))
 

@@ -15,14 +15,14 @@ class Data:
         print('region num={}'.format(self.nreg))
         print('load finished..')
 
-    def load_reg(self, data_dir):      
-        with open(data_dir + 'region2info.json', 'r') as f:
-            region2info = json.load(f)
-
-        regions = sorted(region2info.keys(), key=lambda x: x)
-        reg2id = dict([(x, i) for i, x in enumerate(regions)])
-
-        return reg2id
+    # def load_reg(self, data_dir):
+    #     with open(data_dir + 'region2info.json', 'r') as f:
+    #         region2info = json.load(f)
+    #
+    #     regions = sorted(region2info.keys(), key=lambda x: x)
+    #     reg2id = dict([(x, i) for i, x in enumerate(regions)])
+    #
+    #     return reg2id
 
     def load_kg(self, data_dir):
         # ent2id, rel2id = self.reg2id.copy(), {}

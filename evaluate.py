@@ -5,6 +5,7 @@ import datetime
 from sklearn import metrics
 import warnings
 import pandas as pd
+import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore')
 
 dataset='florida' ##################### modify the dataset here
@@ -71,6 +72,24 @@ class MaximumMeanDiscrepancy_numpy(object):
         return loss
 
 
+def plot_results(flattened_pred_flow, flattened_test_reg_flow):
+    # 创建一个图和一个轴
+    plt.figure()
+
+    # 在同一个图上绘制两个数组的折线图
+    plt.plot(flattened_pred_flow, label='Pred')  # 折线图1
+    plt.plot(flattened_test_reg_flow, label='Truth')  # 折线图2
+
+    # 添加一些有用的信息
+    plt.title('Result')  # 图表标题
+    plt.xlabel('X-axis')  # X轴标签
+    plt.ylabel('Y-axis')  # Y轴标签
+    plt.legend()  # 添加图例
+
+    # 显示图表
+    # plt.show()
+    plt.savefig('output/result_florida.png')
+
 file_path = 'data/data_florida/aggregated_florida_visits.csv'
 florida_visits_df = pd.read_csv(file_path)
 
@@ -105,7 +124,7 @@ def to_four_dimensions(three_dim_list):
 
 allday_data = to_four_dimensions(three_dim_list)
 
-print(allday_data)
+# print(allday_data)
 
 allday_data=np.array(allday_data)
 
@@ -113,6 +132,7 @@ M=np.max(allday_data)
 m=np.min(allday_data)
 
 # allday_data = (2 * allday_data - m - M) / (M - m)  # 归一化到 [-1, 1]
+# allday_data=(allday_data*(M-m)+m+M)/2
 
 allday_flow=np.mean(allday_data,0)
 
@@ -138,8 +158,10 @@ pred=np.load(resultpath+"sample_{}_final.npz".format(it))
 
 pred=pred['sample']
 pred=(pred*(M-m)+m+M)/2
+print(pred)
 
 pred_flow=np.mean(pred,0)
+plot_results(pred_flow.flatten(), test_reg_flow.flatten())
 rmse=metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
 mae=metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
 smape=cal_smape(pred_flow.flatten(),test_reg_flow.flatten())

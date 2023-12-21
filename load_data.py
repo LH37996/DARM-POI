@@ -169,7 +169,7 @@ class Data:
 
         three_dim_list = []
 
-        for i in range(20):
+        for i in range(160):
             three_dim_list.append(extracted_2019_data)
 
         def to_four_dimensions(three_dim_list):
