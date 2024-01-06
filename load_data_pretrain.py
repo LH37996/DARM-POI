@@ -9,7 +9,7 @@ class Data:
     def __init__(self, data_dir):
         # self.reg2id = self.load_reg(data_dir)
         self.kg_data, self.rel2id = self.load_kg(data_dir)
-        self.nreg = len(pd.read_csv(data_dir + "aggregated_florida_visits.csv"))
+        self.nreg = len(pd.read_csv(data_dir + "Florida_visits_reordered_with_isTrain_with_intensity.csv"))
 
         print('number of node=%d, number of edge=%d, number of relations=%d' % (self.nreg, len(self.kg_data), len(self.rel2id)))
         print('region num={}'.format(self.nreg))

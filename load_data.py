@@ -38,7 +38,7 @@ class Data:
         #     regfeas.append(tmp)
         # regfeas = np.array(regfeas, dtype=np.float64)
         # Load the data from the given file path
-        data = pd.read_csv("data/data_florida/aggregated_florida_visits_with_feature.csv")
+        data = pd.read_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
         # Extract the 'feature' column and convert it from string representation of lists to actual lists
         # We use literal_eval to safely evaluate the string as a Python list
         data['feature'] = data['feature'].apply(lambda x: list(literal_eval(x)))
@@ -143,7 +143,7 @@ class Data:
         #     return outer_list, np.array(outer_list).shape[1]
 
         # Load the CSV file
-        file_path = 'data/data_florida/aggregated_florida_visits.csv'
+        file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv'
         florida_visits_df = pd.read_csv(file_path)
         def extract_monthly_data(df, year, months):
             """
@@ -169,7 +169,7 @@ class Data:
 
         three_dim_list = []
 
-        for i in range(160):
+        for i in range(20):
             three_dim_list.append(extracted_2019_data)
 
         def to_four_dimensions(three_dim_list):

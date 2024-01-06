@@ -90,7 +90,7 @@ def plot_results(flattened_pred_flow, flattened_test_reg_flow):
     # plt.show()
     plt.savefig('output/result_florida.png')
 
-file_path = 'data/data_florida/aggregated_florida_visits.csv'
+file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
 florida_visits_df = pd.read_csv(file_path)
 
 def extract_monthly_data(df, year, months):
