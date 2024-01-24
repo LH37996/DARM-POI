@@ -565,7 +565,7 @@ class GaussianDiffusion(nn.Module):
         return img
 
     @torch.no_grad()
-    def sample(self, sampids, batch_size = 16):
+    def sample(self, sampids, batch_size=16):
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
         return sample_fn(sampids, (batch_size, len(sampids), self.data_shape[1], self.data_shape[2]))
 

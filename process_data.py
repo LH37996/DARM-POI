@@ -13,6 +13,7 @@ from itertools import product
 import multiprocessing
 from datetime import datetime
 from scipy.spatial import Voronoi, voronoi_plot_2d
+import random
 
 
 def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1):
@@ -432,6 +433,18 @@ def florida_visits_filter():
     filtered_florida_visits.to_csv(filtered_file_path, index=False)
     remove_rows_with_too_large_data(filtered_file_path)
 
+    # 减少数据
+    file_path = 'data/data_florida/Florida_visits_filtered.csv'
+    florida_visits = pd.read_csv(file_path)
+    # Calculating the mean visitation for each place in 2019
+    columns_2019 = [col for col in florida_visits if col.startswith('2019')]
+    florida_visits['2019_mean'] = florida_visits[columns_2019].mean(axis=1)
+    # Sorting the dataframe by the mean visitation in 2019 and retaining the top 200000 entries
+    sorted_florida_visits = florida_visits.sort_values(by='2019_mean').head(30000)
+    # Saving the sorted dataframe to a new CSV file
+    sorted_file_path = 'data/data_florida/Florida_visits_filtered.csv'
+    sorted_florida_visits.to_csv(sorted_file_path, index=False)
+
 
 def process_weather_station_data(weather_station_folder, florida_range):
     """
@@ -739,8 +752,7 @@ def process_kg(csv_file_path):
     combined_relations.to_csv('data/data_florida/kg.txt', sep='\t', header=False, index=False)
 
 
-def replace_region_id_with_item_id(json_file_path):
-    csv_file_path = "data/data_florida/aggregated_florida_visits.csv"
+def replace_region_id_with_item_id(json_file_path, csv_file_path):
     # Step 1: Read the JSON file to get the list of region_ids
     with open(json_file_path, 'r') as file:
         region_ids = json.load(file)
@@ -886,6 +898,47 @@ def get_kg(file_path):
             file.write(line + '\n')
 
 
+def remove_duplicate_kg_data(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    unique_pairs = set()
+    processed_lines = []
+
+    for line in lines:
+        item_id_1, _, item_id_2 = line.strip().split('\t')
+        pair = tuple(sorted([item_id_1, item_id_2]))
+
+        if pair not in unique_pairs:
+            unique_pairs.add(pair)
+            processed_lines.append(line)
+
+    # 将处理后的数据保存回文件
+    with open(file_path, 'w') as file:
+        file.writelines(processed_lines)
+
+
+def sparsify_graph(file_path, fraction=0.01):
+    """
+    Function to sparsify a graph represented in a file.
+    It retains only a fraction of the edges.
+
+    :param file_path: Path to the file containing the graph.
+    :param fraction: Fraction of edges to retain (default is 0.1).
+    """
+    # Read all lines from the file
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    # Randomly select a fraction of the lines (edges)
+    selected_lines = random.sample(lines, int(len(lines) * fraction))
+
+    # Write the selected lines back to the file
+    with open(file_path, 'w') as file:
+        for line in selected_lines:
+            file.write(line)
+
+
 def get_ratio(file_path, output_path):
     # Step 1: Read the data
     data = pd.read_csv(file_path)
@@ -903,6 +956,28 @@ def get_ratio(file_path, output_path):
     # Step 4: Save the modified data to a new file
     data.to_csv(output_path, index=False)
     return "Processing completed. Data saved to: " + output_path
+
+
+def remove_duplicates_in_train_test_and_save(file_path):
+    """
+    Function to remove duplicates from a list stored in a JSON file and save the results back to the same file.
+
+    Parameters:
+    file_path (str): Path to the JSON file containing the list.
+
+    Returns:
+    None
+    """
+    # Load the list from the file
+    with open(file_path, 'r') as file:
+        data_list = json.load(file)
+
+    # Remove duplicates
+    data_list = list(set(data_list))
+
+    # Save the list back to the file
+    with open(file_path, 'w') as file:
+        json.dump(data_list, file, indent=4)
 
 
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
@@ -935,12 +1010,20 @@ def process_data():
     # process_kg()
     get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")
 
+    remove_duplicate_kg_data("data/data_florida/kg.txt")
+
+    # sparsify_graph("data/data_florida/kg.txt")
+
     get_ratio("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv",
               "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
 
-    replace_region_id_with_item_id("data/data_florida/train_regs_region.json")
-    replace_region_id_with_item_id("data/data_florida/test_regs_region.json")
+    replace_region_id_with_item_id("data/data_florida/train_regs_region.json",
+                                   "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+    replace_region_id_with_item_id("data/data_florida/test_regs_region.json",
+                                   "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
 
+    remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
+    remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")
     sort_train_test_regs()
 
 
@@ -981,3 +1064,9 @@ if __name__ == '__main__':
     #                         "data/data_florida/aggregated_florida_visits.csv")
 
     # sort_train_test_regs()
+
+    # sparsify_graph("data/data_florida/kg.txt")
+
+    # remove_duplicate_kg_data("data/data_florida/kg.txt")
+    # remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
+    # remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")

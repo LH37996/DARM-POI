@@ -90,7 +90,7 @@ def plot_results(flattened_pred_flow, flattened_test_reg_flow):
     # plt.show()
     plt.savefig('output/result_florida.png')
 
-file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
+file_path = '../baselines1/RCGAN/data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
 florida_visits_df = pd.read_csv(file_path)
 
 def extract_monthly_data(df, year, months):
@@ -112,7 +112,15 @@ def extract_monthly_data(df, year, months):
     return extracted_data
 
 extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 12])
+mean_Jan_to_Aug = florida_visits_df["mean_Jan_to_Aug"].values.tolist()
+data_2019_08 = florida_visits_df["2019-08"].values.tolist()
 socall_nreg = len(extracted_2019_data)
+for i in range(socall_nreg):
+    for j in range(4):
+        extracted_2019_data[i][j] *= mean_Jan_to_Aug[i]
+    extracted_2019_data[i][0] += data_2019_08[i]
+    for j in range(1, 4):
+        extracted_2019_data[i][j] += extracted_2019_data[i][j - 1]
 three_dim_list = []
 for i in range(20):
     three_dim_list.append(extracted_2019_data)
@@ -143,7 +151,9 @@ with open(filepath + 'test_regs.json', 'r') as f:
     testregs = json.load(f)
 
 trainids = [x for x in trainregs]
+trainlen = len(trainids)
 sampids = [x for x in testregs]
+testlen = len(sampids)
 
 test_reg_flow = allday_flow[sampids,:,:]
 test_flow = allday_data[:,sampids,:,:]
@@ -154,13 +164,29 @@ def cal_smape(p_pred, p_real, eps=0.00000001):
     return out
 
 it=500
-pred=np.load(resultpath+"sample_{}_final.npz".format(it))
+pred=np.load(resultpath+"sample_200_CCRNN.npz".format(it))
 
 pred=pred['sample']
-pred=(pred*(M-m)+m+M)/2
-print(pred)
+# pred=(pred*(M-m)+m+M)/2
+
+
+
+print(len(pred[0]))
+print(len(pred[0][0]))
+print(trainlen)
+print(testlen)
+
+for bs in range(len(pred)):
+    for sampid in sampids:
+        for i in range(4):
+            pred[bs][sampid - trainlen][i][0] *= mean_Jan_to_Aug[sampid]
+        pred[bs][sampid - trainlen][0][0] += data_2019_08[sampid]
+        for i in range(1, 4):
+            pred[bs][sampid - trainlen][i][0] += pred[bs][sampid - trainlen][i - 1][0]
 
 pred_flow=np.mean(pred,0)
+print(pred_flow[105])
+print(test_reg_flow[105])
 plot_results(pred_flow.flatten(), test_reg_flow.flatten())
 rmse=metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
 mae=metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())

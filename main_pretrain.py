@@ -74,6 +74,9 @@ class Experiment:
                 loss.backward()
                 opt.step()
                 losses.append(loss.item())
+            if it % 100 == 0:
+                np.savez(archive_path + f'ER_{it}.npz', E_pretrain=model.E.weight.detach().cpu().numpy())
+
             if self.dr:
                 scheduler.step()
             print('\nEpoch=%d, train time cost %.4fs, loss:%.8f' % (it, time.time() - start_train, np.mean(losses)))

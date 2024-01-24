@@ -143,7 +143,7 @@ class Data:
         #     return outer_list, np.array(outer_list).shape[1]
 
         # Load the CSV file
-        file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv'
+        file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
         florida_visits_df = pd.read_csv(file_path)
         def extract_monthly_data(df, year, months):
             """
@@ -169,7 +169,7 @@ class Data:
 
         three_dim_list = []
 
-        for i in range(20):
+        for i in range(10):
             three_dim_list.append(extracted_2019_data)
 
         def to_four_dimensions(three_dim_list):
@@ -196,12 +196,17 @@ class Data:
 
         visit_data = to_four_dimensions(three_dim_list)
         train_data = np.array(visit_data)
+        print(train_data)
         M, m = np.max(train_data), np.min(train_data)
-        train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
+        # train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
+        print("--------------------------DATA LENGTH--------------------------")
+        print(socall_nreg)
+        print(train_data.shape)
+
         return train_data.tolist(), socall_nreg, m, M
 
     def load_pretrain(self, data_dir):
-        data = np.load(data_dir+'ER.npz')
+        data = np.load(data_dir+'ER_600.npz')
         KGE_pretrain = data['E_pretrain']  # nreg*kgedim
 
         scale = np.array(self.train_data)  # nday*nreg*nhour*2
