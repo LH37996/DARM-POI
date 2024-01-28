@@ -7,10 +7,7 @@ import json
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
-from tqdm.contrib import tzip
 from concurrent.futures import ProcessPoolExecutor
-from itertools import product
-import multiprocessing
 from datetime import datetime
 from scipy.spatial import Voronoi, voronoi_plot_2d
 import random
@@ -1107,44 +1104,3 @@ def process_data():
 
 if __name__ == '__main__':
     process_data()
-
-    # print(len(aggregate_and_plot_visits('data/data_florida/Florida_visits_filtered.csv',
-    #                                     lat_delta=0.01, long_delta=0.01, plot=1)))
-
-    # aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
-    #                      lat_delta=3, long_delta=3, bs=100)
-
-    # daily_summaries_latest_filter()
-
-    # # 统计wsf2非空的文件数
-    # files_with_wsf2, total_files = count_wsf2_in_files()
-    # percentage = (files_with_wsf2 / total_files) * 100 if total_files > 0 else 0
-    # print(f"WSF2 非空的文件数: {files_with_wsf2}/{total_files} ({percentage:.2f}%)")
-
-    # count_wsf2_items()
-
-    # filter_csv_files()
-
-    # count_csv_data_items("data/data_florida/daily_summaries_latest_filtered_wsf2")
-
-    # get_train_test()
-
-    # get_poi_intensity()
-
-    # get_poi_feature_add_to_csv()
-
-    # process_kg()
-    #
-    # replace_region_id_with_item_id("data/data_florida/train_regs_region.json")
-    # replace_region_id_with_item_id("data/data_florida/test_regs_region.json")
-
-    # sort_data_by_train_test("data/data_florida/aggregated_florida_visits.csv",
-    #                         "data/data_florida/aggregated_florida_visits.csv")
-
-    # sort_train_test_regs()
-
-    # sparsify_graph("data/data_florida/kg.txt")
-
-    # remove_duplicate_kg_data("data/data_florida/kg.txt")
-    # remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
-    # remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")
