@@ -491,7 +491,8 @@ def process_weather_station_data(weather_station_folder, florida_range):
                 wsf2_mean = first_week_sept['WSF2'].mean()
 
                 # Normalize and calculate observation_intensity
-                normalized_values = normalize(np.array([prcp_mean, wsf2_mean]))
+                # normalized_values = normalize(np.array([prcp_mean, wsf2_mean]))
+                normalized_values = np.array([prcp_mean, wsf2_mean])
                 observation_intensity = np.sum(normalized_values)
 
                 # Append the values to the lists
@@ -601,13 +602,13 @@ def haversine(lon1, lat1, lon2, lat2):
     return c * r
 
 # Load the aggregated_florida_visits.csv file to get the latitude and longitude range
-florida_visits_file = 'data/data_florida/aggregated_florida_visits.csv'
+florida_visits_file = 'data/data_florida/Florida_visits_2019_2020.csv'
 florida_visits_df = pd.read_csv(florida_visits_file)
 # Calculating the latitude and longitude range for Florida
-min_latitude = florida_visits_df['center_latitude'].min()
-max_latitude = florida_visits_df['center_latitude'].max()
-min_longitude = florida_visits_df['center_longitude'].min()
-max_longitude = florida_visits_df['center_longitude'].max()
+min_latitude = florida_visits_df['latitude'].min()
+max_latitude = florida_visits_df['latitude'].max()
+min_longitude = florida_visits_df['longitude'].min()
+max_longitude = florida_visits_df['longitude'].max()
 florida_lat_lon_range = {
     "min_latitude": min_latitude,
     "max_latitude": max_latitude,
@@ -628,6 +629,12 @@ def calculate_poi_intensity(poi):
     # print(poi_intensity)
     return poi_intensity
 
+def get_distance_list(poi):
+    poi_lat, poi_lon = poi
+    distance_list = []
+    for (obs_lat, obs_lon) in zip(observation_latitude_list, observation_longitude_list):
+        distance_list.append(haversine(poi_lon, poi_lat, obs_lon, obs_lat))
+    return distance_list
 
 def disaster_intensity_mapping(poi_latitude_list, poi_longitude_list
                                , s=1, k=1):
@@ -701,23 +708,91 @@ def get_poi_intensity(file_path):
     add_intensity_to_csv(file_path, poi_intensity_list)
     return poi_intensity_list
 
+
+def distance_mapping(poi_latitude_list, poi_longitude_list):
+    assert len(observation_intensity_list) == len(observation_latitude_list) == len(observation_longitude_list)
+    assert len(poi_latitude_list) == len(poi_longitude_list)
+
+    poi_list = list(zip(poi_latitude_list, poi_longitude_list))
+    # 使用多进程池处理外循环
+    with ProcessPoolExecutor() as executor:
+        distances_list = list(tqdm(
+            executor.map(get_distance_list, poi_list), total=len(poi_list)
+        ))
+
+    return distances_list
+
+
+def add_distance_to_csv(csv_file_path, distances_list):
+    df = pd.read_csv(csv_file_path)
+
+    # 确保intensity_list的长度与CSV文件中的行数相同
+    if len(distances_list) != len(df):
+        raise ValueError("Length of intensity_list does not match the number of rows in the CSV file.")
+
+    # 将intensity_list添加为新列
+    df['Distance'] = distances_list
+
+    # 保存修改后的数据为新的CSV文件
+    new_csv_file_path = csv_file_path.replace(".csv", "_with_distance.csv")
+    df.to_csv(new_csv_file_path, index=False)
+
+    return new_csv_file_path
+
+
+def get_distance(file_path):
+    poi_latitude_list, poi_longitude_list = get_poi_lat_long_list(file_path)
+    distances_list = distance_mapping(
+        poi_latitude_list, poi_longitude_list
+    )
+    add_distance_to_csv(file_path, distances_list)
+    return distances_list
+
+
 def get_poi_feature_add_to_csv(file_path):
     data = pd.read_csv(file_path)
-
     # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
     average_visits = data[['2019-01', '2019-02', '2019-03', '2019-04', '2019-05', '2019-06', '2019-07', '2019-08']].mean(axis=1)
-
     # Step 2: Normalize the average visits and the Intensity
     normalized_visits = (average_visits - average_visits.min()) / (average_visits.max() - average_visits.min())
     normalized_intensity = (data['Intensity'] - data['Intensity'].min()) / (
                 data['Intensity'].max() - data['Intensity'].min())
-
     # Step 3: Create the new 'feature' column
     data['feature'] = list(zip(normalized_visits, normalized_intensity))
-
     # Prepare the file path for saving the new CSV
     new_file_path = file_path.replace("with_intensity.csv", "with_feature.csv")
+    # Step 4: Save the updated data to a new CSV file
+    data.to_csv(new_file_path, index=False)
 
+
+def get_poi_feature_add_to_csv_distance(file_path):
+    data = pd.read_csv(file_path)
+    # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
+    average_visits = data[['2019-01', '2019-02', '2019-03', '2019-04', '2019-05', '2019-06', '2019-07', '2019-08']].mean(axis=1)
+    # Step 2: Normalize the average visits and the Intensity
+    normalized_visits = (average_visits - average_visits.min()) / (average_visits.max() - average_visits.min())
+    def to_list(data_D):
+        res = []
+        for s in data_D:
+            res.append([float(item) for item in s.strip("[]").split(", ")])
+        return res
+    data_D = to_list(data['Distance'])
+    min_data_D = min(value for inner_list in data_D for value in inner_list)
+    max_data_D = max(value for inner_list in data_D for value in inner_list)
+    normalized_distance = []
+    for distances in data_D:
+        normalized_distances = []
+        for distance in distances:
+            normalized_distances.append((distance - min_data_D) / (max_data_D - min_data_D))
+        normalized_distance.append(normalized_distances)
+    # Step 3: Create the new 'feature' column
+    print(len(normalized_visits), len(normalized_distance), len(observation_intensity_list))
+    observation_intensity_list_list = []
+    for i in range(len(normalized_distance)):
+        observation_intensity_list_list.append(observation_intensity_list)
+    data['feature'] = list(zip(normalized_visits, normalized_distance, observation_intensity_list_list))
+    # Prepare the file path for saving the new CSV
+    new_file_path = file_path.replace("with_distance.csv", "with_feature.csv")
     # Step 4: Save the updated data to a new CSV file
     data.to_csv(new_file_path, index=False)
 
@@ -1002,10 +1077,13 @@ def process_data():
     #                      lat_delta, long_delta)
 
     # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
-    get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+    # get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+    # Florida_visits_reordered_with_isTrain.csv.csv -> Florida_visits_reordered_with_distance.csv
+    get_distance("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
 
-    # aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
-    get_poi_feature_add_to_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")
+
+    # GHANGED AND CHANGE_THE_FUNCTION! aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
+    get_poi_feature_add_to_csv_distance("data/data_florida/Florida_visits_reordered_with_isTrain_with_distance.csv")
 
     # process_kg()
     get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")

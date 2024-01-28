@@ -20,7 +20,7 @@ import torch_geometric.transforms as T
 from sklearn import metrics
 
 from load_data import Data
-from model import KGFlow, GaussianDiffusion, DeterministicFeedForwardNeuralNetwork
+from model import KGFlow, GaussianDiffusion, DeterministicFeedForwardNeuralNetwork, AttentionFeedForwardNeuralNetwork
 
 # os.environ['CUDA_VISIBLE_DEVICES']='4'
 import setproctitle
@@ -29,15 +29,19 @@ setproctitle.setproctitle('KSTDiff@zzl')
 device = torch.device('cuda')
 
 class MyDataset(Dataset):
-    def __init__(self, x, y):
+    def __init__(self, x, x2, x3, y):
         self.x = x
+        self.x2 = x2
+        self.x3 = x3
         self.y = y
     def __len__(self):
         return len(self.x)
     def __getitem__(self, idx):
         xbatch = self.x[idx]
+        x2batch = self.x2[idx]
+        x3batch = self.x3[idx]
         ybatch = self.y[idx]
-        sample = {"x": xbatch, "y": ybatch}
+        sample = {"x": xbatch, "x2": x2batch, "x3":x3batch, "y": ybatch}
         # 返回一个 dict
         return sample
 
@@ -102,27 +106,52 @@ class Experiment:
         with torch.no_grad():
             for i, batch in enumerate(dataloader):
                 batchx = batch['x']
+                batchx2 = batch['x2']
+                batchx3 = batch['x3']
                 batchy = batch['y']
-                pred = cond_pred_model(batchx)  # bs*1
+                pred = cond_pred_model(batchx, batchx3, batchx2)[0]  # bs*1
                 pred = pred.reshape(-1)
                 # rescale
                 m, M = d.min_data, d.max_data
                 batchy = (batchy*(M-m)+m+M)/2
                 pred = (pred*(M-m)+m+M)/2
+                # print("batchy.shape = " + str(batchy.shape))
+                # print("pred.shape = " + str(pred.shape))
 
                 y_true.extend(batchy.cpu().numpy().tolist())
                 y_pred.extend(pred.cpu().numpy().tolist())
             rmse = metrics.mean_squared_error(y_pred, y_true, squared=False)
         return rmse
     
+    # def train_guidance_model(self, cond_pred_model, dataloader, opt):
+    #     cond_pred_model.train()
+    #     lossfunc = nn.MSELoss()
+    #     losses = []
+    #     for i, batch in enumerate(dataloader):
+    #         batchx = batch['x']
+    #         batchy = batch['y']
+    #         pred = cond_pred_model(batchx)  # bs*1
+    #         batchy = batchy.reshape(pred.shape)
+    #         loss = lossfunc(pred, batchy)
+    #
+    #         opt.zero_grad()
+    #         loss.backward()
+    #         opt.step()
+    #         losses.append(loss.item())
+    #     # print('loss:%.3f'%np.mean(losses))
+    #     return np.mean(losses)
+
+
     def train_guidance_model(self, cond_pred_model, dataloader, opt):
         cond_pred_model.train()
         lossfunc = nn.MSELoss()
         losses = []
         for i, batch in enumerate(dataloader):
             batchx = batch['x']
+            batchx2 = batch['x2']
+            batchx3 = batch['x3']
             batchy = batch['y']
-            pred = cond_pred_model(batchx)  # bs*1
+            pred = cond_pred_model(batchx, batchx3, batchx2)[0]  # bs*1
             batchy = batchy.reshape(pred.shape)
             loss = lossfunc(pred, batchy)
 
@@ -142,18 +171,26 @@ class Experiment:
         sampids = torch.tensor(d.sampids, device=device)
 
         nn_x = torch.tensor([x[0] for x in d.scale_pred_data], device=device)
+        nn_x2 = torch.tensor(d.Mlist, device=device)
+        nn_x3 = torch.tensor(d.Ilist, device=device)
         nn_y = torch.tensor([x[1] for x in d.scale_pred_data], device=device)
         nn_x_train, nn_y_train = nn_x[trainids], nn_y[trainids]
+        nn_x2_train = nn_x2[trainids]
+        nn_x3_train = nn_x3[trainids]
         nn_x_samp, nn_y_samp = nn_x[sampids], nn_y[sampids]
+        nn_x2_samp = nn_x2[sampids]
+        nn_x3_samp = nn_x3[sampids]
 
-        nn_train = MyDataset(nn_x_train, nn_y_train)
-        nn_test = MyDataset(nn_x_samp, nn_y_samp)
+        nn_train = MyDataset(nn_x_train, nn_x2_train, nn_x3_train, nn_y_train)
+        nn_test = MyDataset(nn_x_samp, nn_x2_samp, nn_x3_samp, nn_y_samp)
         train_loader = DataLoader(nn_train, batch_size=64, shuffle=True)
         test_loader = DataLoader(nn_test, batch_size=64, shuffle=False)
 
-        dim_in = nn_x.shape[1]
+        # print("nn_x.shape[0]:" + str(nn_x.shape[1]))
+        dim_in = nn_x.shape[1] * 2
         dim_out = 1
-        cond_pred_model = DeterministicFeedForwardNeuralNetwork(dim_in=dim_in, dim_out=dim_out).to(device)
+        # cond_pred_model = DeterministicFeedForwardNeuralNetwork(dim_in=dim_in, dim_out=dim_out).to(device)
+        cond_pred_model = AttentionFeedForwardNeuralNetwork(dim_in=dim_in, dim_out=dim_out).to(device)
         opt_nn = torch.optim.Adam(cond_pred_model.parameters(), lr=self.kwargs['nn_lr'])
         # pretrain cond_pred_model
         rmse_train = self.evaluate_guidance_model(cond_pred_model, train_loader)
@@ -291,7 +328,7 @@ if __name__ == '__main__':
 
     experiment_name = 'KSTDiff'
 
-    mlflow.set_tracking_uri('/data1/zhouzhilun/flow_generation/mlflow_output/')
+    mlflow.set_tracking_uri('/home/han/mlflow_output/')
     client = MlflowClient()
     try:
         EXP_ID = client.create_experiment(experiment_name)
@@ -312,8 +349,8 @@ if __name__ == '__main__':
         seed = args.seed
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.mps.manual_seed(seed)
-        # torch.mps.manual_seed_all(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 

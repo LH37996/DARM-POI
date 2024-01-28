@@ -3,6 +3,7 @@ import copy
 from random import random
 from functools import partial
 from collections import namedtuple
+import numpy as np
 
 import torch
 from torch import nn, einsum
@@ -67,6 +68,60 @@ class DeterministicFeedForwardNeuralNetwork(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+
+
+class AttentionFeedForwardNeuralNetwork(nn.Module):
+    def __init__(self, dim_in, dim_out, hid_layers=[100, 50], num_heads=1,
+                 use_batchnorm=False, negative_slope=0.01, dropout_rate=0):
+        super(AttentionFeedForwardNeuralNetwork, self).__init__()
+        self.dim_in = dim_in
+        self.dim_out = dim_out
+        self.hid_layers = hid_layers
+        self.use_batchnorm = use_batchnorm
+        self.negative_slope = negative_slope
+        self.dropout_rate = dropout_rate
+
+        # 创建多头注意力层
+        self.attention = nn.MultiheadAttention(embed_dim=1, num_heads=num_heads)
+
+        # 创建前馈层
+        self.nn_layers = [self.dim_in] + self.hid_layers
+        layers = self.create_nn_layers()
+        self.network = nn.Sequential(*layers)
+
+    def create_nn_layers(self):
+        layers = []
+        for idx in range(len(self.nn_layers) - 1):
+            layers.append(nn.Linear(self.nn_layers[idx], self.nn_layers[idx + 1]))
+            if self.use_batchnorm:
+                layers.append(nn.BatchNorm1d(self.nn_layers[idx + 1]))
+            layers.append(nn.LeakyReLU(negative_slope=self.negative_slope))
+            layers.append(nn.Dropout(p=self.dropout_rate))
+        layers.append(nn.Linear(self.nn_layers[-1], self.dim_out))
+        return layers
+
+    def forward(self, x, I, M):
+        # print(x.shape)
+        # print(I.shape)
+        # print(M.shape)
+        x = x.transpose(0, 1)  # 调整维度以适应多头注意力层
+        I = I.transpose(0, 1).unsqueeze(2)
+        M = M.transpose(0, 1).unsqueeze(2)
+        # 应用注意力机制
+        attn_output, attn_weights = self.attention(I, M, M)
+        attn_output = attn_output.transpose(0, 1)
+        # print("attn_output.shape: --------")
+        # print(attn_output.squeeze(-1).shape)
+        # 将注意力层的输出传递到后续层
+        # 将attn_output和additional_data拼接
+        # print(attn_output.squeeze(-1).shape)
+        # print(I[:, 0].unsqueeze(1).shape)
+        poi_intensity = (attn_output.squeeze(-1)) @ (I[:, 0])
+        combined_input = torch.cat([poi_intensity.transpose(0, 1), x], dim=0)
+        # print("combined_input.shape: " + str(combined_input.shape))
+        output = self.network(combined_input.transpose(0, 1))
+        # 返回输出和注意力权重
+        return output, attn_weights
 
 
 # sinusoidal positional embeds
@@ -226,6 +281,7 @@ class KGFlow(nn.Module):
         self.num_sas = kwargs['num_sas']
         self.flow_channels = 1
 
+        # print(d.features.shape)
         fea_dim = d.features.shape[1]
 
         self.features = nn.Embedding.from_pretrained(torch.tensor(d.features, dtype=torch.float), freeze=True)
@@ -415,6 +471,8 @@ class GaussianDiffusion(nn.Module):
 
         self.register_buffer('scale', torch.tensor(d.scale, dtype = torch.float)) # nreg*1
         self.register_buffer('scale_pred_X', torch.tensor(d.scale_pred_X, dtype = torch.float)) # nreg*37
+        self.register_buffer('Mlist', torch.tensor(d.Mlist, dtype = torch.float))
+        self.register_buffer('Ilist', torch.tensor(d.Ilist, dtype = torch.float))
 
         register_buffer('betas', betas)
         register_buffer('alphas_cumprod', alphas_cumprod)
@@ -490,7 +548,9 @@ class GaussianDiffusion(nn.Module):
         bs, nreg, nh, c = x_start.shape
 
         X = self.scale_pred_X[regids]
-        pred = self.cond_pred_model(X) # nregs*1
+        I = self.Ilist[regids]
+        M = self.Mlist[regids]
+        pred = self.cond_pred_model(X, I, M)[0] # nregs*1
         x_T_mean = pred[None, :, :, None]
         x_T_mean = x_T_mean.repeat(bs, 1, nh, c)
 

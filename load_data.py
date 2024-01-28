@@ -7,7 +7,7 @@ from ast import literal_eval
 
 class Data:
     def __init__(self, data_dir):
-        self.trainids, self.sampids, self.trainregs, self.sampleregs, self.regfeas = self.load_reg(data_dir)
+        self.trainids, self.sampids, self.trainregs, self.sampleregs, self.regfeas, self.Mlist, self.Ilist = self.load_reg(data_dir)
         self.rel2id, self.kg_data, self.train_ent2id, self.trainkg_data, self.sample_ent2id, self.samplekg_data = self.load_kg(data_dir)
         self.train_data, self.nreg, self.min_data, self.max_data = self.load_flow(data_dir)  # ndays*nreg*nhour*2
         self.features, self.scale, self.scale_pred_data, self.scale_pred_X, self.KGE_pretrain = self.load_pretrain(data_dir)
@@ -41,14 +41,39 @@ class Data:
         data = pd.read_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
         # Extract the 'feature' column and convert it from string representation of lists to actual lists
         # We use literal_eval to safely evaluate the string as a Python list
-        data['feature'] = data['feature'].apply(lambda x: list(literal_eval(x)))
-        # Sort the data by 'item_id' to ensure the order
-        data_sorted = data.sort_values(by='item_id')
-        # Extract the features into a list of lists (2D list)
-        regfeas = data_sorted['feature'].tolist()
+        # print(type(data['feature'][1]))
+        def convert_list_with_nan(string_list):
+            result = []
+            for item in string_list:
+                # 将字符串中的 'nan' 替换为 '0.1'
+                modified_item = item.replace("nan", "0.1")
+                # 将字符串转换为元组
+                tuple_item = eval(modified_item)
+                # 处理元组中的每个元素
+                new_tuple = []
+                for element in tuple_item:
+                    if isinstance(element, list):
+                        # 将列表中的元素转换为浮点数
+                        new_list = [float(x) for x in element]
+                        new_tuple.append(new_list)
+                    else:
+                        # 直接转换为浮点数
+                        new_tuple.append(float(element))
+                # 将处理后的元组添加到结果列表中
+                result.append(tuple(new_tuple))
+            return result
 
-        # ORI: return reg2id, trainids, sampids, trainregs, sampregs, regfeas.tolist()
-        return trainids, sampids, trainregs, sampregs, regfeas
+        # data['feature'] = data['feature'].apply(lambda x: list(literal_eval(x)))
+        # Sort the data by 'item_id' to ensure the order
+        # data_sorted = data.sort_values(by='item_id')
+        # Extract the features into a list of lists (2D list)
+        # regfeas = convert_list_with_nan(data['feature'].tolist())
+        allfeas = convert_list_with_nan(data['feature'].tolist())
+        regfeas = [item[0] for item in allfeas]
+        distances = [item[1] for item in allfeas]
+        intensities = [item[1] for item in allfeas]
+        # return reg2id, trainids, sampids, trainregs, sampregs, regfeas.tolist()
+        return trainids, sampids, trainregs, sampregs, regfeas, distances, intensities
 
     # Knowledge Graph
     def load_kg(self, data_dir):
@@ -196,7 +221,7 @@ class Data:
 
         visit_data = to_four_dimensions(three_dim_list)
         train_data = np.array(visit_data)
-        print(train_data)
+        # print(train_data)
         M, m = np.max(train_data), np.min(train_data)
         # train_data = (2 * train_data - m - M) / (M - m)  # 归一化到 [-1, 1]
         print("--------------------------DATA LENGTH--------------------------")
@@ -206,7 +231,7 @@ class Data:
         return train_data.tolist(), socall_nreg, m, M
 
     def load_pretrain(self, data_dir):
-        data = np.load(data_dir+'ER_600.npz')
+        data = np.load(data_dir+'ER_300.npz')
         KGE_pretrain = data['E_pretrain']  # nreg*kgedim
 
         scale = np.array(self.train_data)  # nday*nreg*nhour*2
@@ -218,9 +243,13 @@ class Data:
         scale_pred_X = []
         for i in range(self.nreg):
             X = self.regfeas[i]
-            scale_pred_data.append([X, scale[i].item()])
-            scale_pred_X.append(X)
+            scale_pred_data.append([[X], scale[i].item()])
+            scale_pred_X.append([X])
+        # scale_pred_data[:,none]
         features = np.array(scale_pred_X)
+        # print(features[1])
+        # print("feature:----------------")
+        # print(features.shape)
 
         return features, scale, scale_pred_data, scale_pred_X, KGE_pretrain
         
