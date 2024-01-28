@@ -1,17 +1,17 @@
 # POI Visits generation
 
-The code is tested under a Linux desktop with torch 1.9.0 and Python 3.8.10.
+The code is tested under a Linux desktop with torch 2.0.0 and Python 3.8.10.
 
 ## Installation
 
 ### Environment
 - Tested OS: Linux
 - Python >= 3.8
-- PyTorch == 1.9.0
+- PyTorch == 2.0.0
 - torch_geometric == 1.7.2
 
 ### Dependencies
-1. Install PyTorch 1.9.0 with the correct CUDA version.
+1. Install PyTorch 2.0.0 with the correct CUDA version.
 2. Use the ``pip install -r requirements. txt`` command to install all of the Python modules and packages used in this project.
 
 ## Usage

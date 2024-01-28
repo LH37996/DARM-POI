@@ -90,7 +90,7 @@ def plot_results(flattened_pred_flow, flattened_test_reg_flow):
     # plt.show()
     plt.savefig('output/result_florida.png')
 
-file_path = '../baselines1/RCGAN/data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
+file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
 florida_visits_df = pd.read_csv(file_path)
 
 def extract_monthly_data(df, year, months):
@@ -164,7 +164,7 @@ def cal_smape(p_pred, p_real, eps=0.00000001):
     return out
 
 it=500
-pred=np.load(resultpath+"sample_200_CCRNN.npz".format(it))
+pred=np.load(resultpath+"sample_500_final.npz".format(it))
 
 pred=pred['sample']
 # pred=(pred*(M-m)+m+M)/2
