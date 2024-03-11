@@ -1052,55 +1052,166 @@ def remove_duplicates_in_train_test_and_save(file_path):
         json.dump(data_list, file, indent=4)
 
 
+import pandas as pd
+import csv
+import os
+
+
+def update_weekly_visits(visits_csv_path, weekly_data_dir):
+    # Load the CSV file into a DataFrame
+    florida_visits_df = pd.read_csv(visits_csv_path)
+
+    # Initialize a new column 'Weekly' for storing weekly visits data
+    florida_visits_df['Weekly'] = None
+    for index in range(len(florida_visits_df)):  # Initialize empty lists for the specified number of records
+        florida_visits_df.at[index, 'Weekly'] = []
+
+    # Iterate over each file only once and update the weekly data for the specified placekeys if present
+    extracted_subdir_files = os.listdir(weekly_data_dir)
+    for file_name in extracted_subdir_files:
+        if file_name.endswith('.csv'):  # Ensure to process only CSV files
+            file_path = os.path.join(weekly_data_dir, file_name)
+            with open(file_path, mode='r', encoding='utf-8') as file:
+                csv_reader = csv.DictReader(file)
+                # Create a map of placekey to its index for quick lookup
+                placekey_to_index = {florida_visits_df.at[i, 'placekey']: i for i in range(florida_visits_df)}
+                for row in csv_reader:
+                    placekey = row.get('placekey')
+                    if placekey in placekey_to_index:
+                        # Update weekly visits if 'normalized_visits_by_state_scaling' is not empty
+                        normalized_visits = row.get('normalized_visits_by_state_scaling')
+                        if normalized_visits:
+                            index = placekey_to_index[placekey]
+                            florida_visits_df.at[index, 'Weekly'].append(float(normalized_visits))
+
+    # Save the updated DataFrame to a new CSV file
+    updated_csv_path = visits_csv_path.replace('.csv', '_updated.csv')
+    florida_visits_df.to_csv(updated_csv_path, index=False)
+
+    return updated_csv_path
+
+
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
-def process_data():
-    # Florida_visits_2019_2020.csv -> Florida_visits_filtered.csv
-    florida_visits_filter()
+def process_data_monthly(dataset):
+    if dataset == "florida":
+        # Florida_visits_2019_2020.csv -> Florida_visits_filtered.csv
+        florida_visits_filter()
 
-    add_region_id_and_save("data/data_florida/Florida_visits_filtered.csv",
-                           "data/data_florida/Florida_visits_filtered_with_region_id.csv")
+        add_region_id_and_save("data/data_florida/Florida_visits_filtered.csv",
+                               "data/data_florida/Florida_visits_filtered_with_region_id.csv")
 
-    get_train_test("data/data_florida/Florida_visits_filtered_with_region_id.csv")
+        get_train_test("data/data_florida/Florida_visits_filtered_with_region_id.csv")
 
-    reorder_csv_and_add_isTrain("data/data_florida/train_regs_region.json",
-                                "data/data_florida/test_regs_region.json",
-                                "data/data_florida/Florida_visits_filtered_with_region_id.csv",
-                                "data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        reorder_csv_and_add_isTrain("data/data_florida/train_regs_region.json",
+                                    "data/data_florida/test_regs_region.json",
+                                    "data/data_florida/Florida_visits_filtered_with_region_id.csv",
+                                    "data/data_florida/Florida_visits_reordered_with_isTrain.csv")
 
-    add_item_id_and_save("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        add_item_id_and_save("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
 
-    # # Florida_visits_filtered.csv -> aggregated_florida_visits.csv
-    # aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
-    #                      lat_delta, long_delta)
+        # # Florida_visits_filtered.csv -> aggregated_florida_visits.csv
+        # aggregate_poi_visits("data/data_florida/Florida_visits_filtered.csv",
+        #                      lat_delta, long_delta)
 
-    # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
-    # get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
-    # Florida_visits_reordered_with_isTrain.csv.csv -> Florida_visits_reordered_with_distance.csv
-    get_distance("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
+        # get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        # Florida_visits_reordered_with_isTrain.csv.csv -> Florida_visits_reordered_with_distance.csv
+        get_distance("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
 
 
-    # GHANGED AND CHANGE_THE_FUNCTION! aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
-    get_poi_feature_add_to_csv_distance("data/data_florida/Florida_visits_reordered_with_isTrain_with_distance.csv")
+        # GHANGED AND CHANGE_THE_FUNCTION! aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
+        get_poi_feature_add_to_csv_distance("data/data_florida/Florida_visits_reordered_with_isTrain_with_distance.csv")
 
-    # process_kg()
-    get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")
+        # process_kg()
+        get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")
 
-    remove_duplicate_kg_data("data/data_florida/kg.txt")
+        remove_duplicate_kg_data("data/data_florida/kg.txt")
 
-    # sparsify_graph("data/data_florida/kg.txt")
+        # sparsify_graph("data/data_florida/kg.txt")
 
-    get_ratio("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv",
-              "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        get_ratio("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv",
+                  "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
 
-    replace_region_id_with_item_id("data/data_florida/train_regs_region.json",
-                                   "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
-    replace_region_id_with_item_id("data/data_florida/test_regs_region.json",
-                                   "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_florida/train_regs_region.json",
+                                       "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_florida/test_regs_region.json",
+                                       "data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
 
-    remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
-    remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")
-    sort_train_test_regs()
+        remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
+        remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")
+        sort_train_test_regs()
+    elif dataset == "SC":
+        pass
+
+
+# def process_file(args):
+#     """
+#     处理单个文件，提取每个placekey的normalized_visits_by_state_scaling数据。
+#     参数:
+#     - args: 包含文件路径和所有placekeys的元组。
+#     返回:
+#     - 一个字典，包含每个placekey及其对应的周访问数据列表。
+#     """
+#     file_path, placekeys = args
+#     weekly_visits_dict = {placekey: [] for placekey in placekeys}
+#
+#     try:
+#         week_data = pd.read_csv(file_path)
+#         for placekey in tqdm(placekeys):
+#             if placekey in week_data['placekey'].values:
+#                 row = week_data.loc[week_data['placekey'] == placekey]
+#                 if 'normalized_visits_by_state_scaling' in row.columns and not pd.isna(
+#                         row['normalized_visits_by_state_scaling'].iloc[0]):
+#                     weekly_visits_dict[placekey].append(row['normalized_visits_by_state_scaling'].iloc[0])
+#     except Exception as e:
+#         print(f"Error processing file {os.path.basename(file_path)}: {e}")
+#
+#     return weekly_visits_dict
+#
+#
+# def process_and_save_weekly_visits(weekly_folder, csv_path, output_path):
+#     """
+#     处理POI的周访问数据并保存更新后的CSV文件，使用并行逻辑加速处理。
+#
+#     参数:
+#     - zip_path: 周访问数据zip文件的路径。
+#     - csv_path: 原始Florida_visits_2019_2020.csv文件的路径。
+#     - output_path: 更新后的CSV文件要保存的路径。
+#     """
+#
+#     florida_visits_df = pd.read_csv(csv_path)
+#     placekeys = florida_visits_df['placekey'].tolist()
+#
+#     # 准备处理文件的参数列表
+#     files_to_process = [(os.path.join(weekly_folder, f), placekeys) for f in sorted(os.listdir(weekly_folder)) if
+#                         f.endswith('.csv')]
+#
+#     # 使用多进程池处理文件
+#     with ProcessPoolExecutor() as executor:
+#         results = list(tqdm(executor.map(process_file, files_to_process)))
+#
+#     # 合并结果
+#     weekly_visits_dict = {placekey: [] for placekey in placekeys}
+#     for result in results:
+#         for placekey, visits in result.items():
+#             weekly_visits_dict[placekey].extend(visits)
+#
+#     # 更新DataFrame
+#     florida_visits_df['Weekly'] = florida_visits_df['placekey'].apply(lambda pk: weekly_visits_dict.get(pk, []))
+#
+#     # 保存到新文件
+#     florida_visits_df.to_csv(output_path, index=False)
+#
+#     print("Process completed and file saved.")
+    
+
+def process_data_weekly(dataset):
+    if dataset == "florida":
+        pass
+    if dataset == "SC":
+        pass
 
 
 if __name__ == '__main__':
-    process_data()
+    # process_data_monthly("florida")
+    process_data_weekly("florida")

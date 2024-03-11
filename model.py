@@ -70,6 +70,23 @@ class DeterministicFeedForwardNeuralNetwork(nn.Module):
         return self.network(x)
 
 
+# 定义一个函数来求取平均并保存为二维列表
+def average_and_save(tensor):
+    # 计算给定tensor沿第一个维度的平均值
+    averaged_tensor = torch.mean(tensor, dim=0)
+
+    # 将tensor转换为二维列表
+    two_dim_list = averaged_tensor.tolist()
+
+    # 将列表保存到文件中
+    file_path = 'data/data_florida/outputs/weights.txt'
+    with open(file_path, 'w') as f:
+        for row in two_dim_list:
+            f.write(' '.join(map(str, row)) + '\n')
+
+    return file_path
+
+
 class AttentionFeedForwardNeuralNetwork(nn.Module):
     def __init__(self, dim_in, dim_out, hid_layers=[100, 50], num_heads=1,
                  use_batchnorm=False, negative_slope=0.01, dropout_rate=0):
@@ -107,11 +124,19 @@ class AttentionFeedForwardNeuralNetwork(nn.Module):
         x = x.transpose(0, 1)  # 调整维度以适应多头注意力层
         I = I.transpose(0, 1).unsqueeze(2)
         M = M.transpose(0, 1).unsqueeze(2)
+        # print("x.shape: --------")
+        # print(x.shape)
+        # print("I.shape: --------")
+        # print(I.shape)
+        # print("M.shape: --------")
+        # print(M.shape)
         # 应用注意力机制
         attn_output, attn_weights = self.attention(I, M, M)
+        # average_and_save(attn_weights)
         attn_output = attn_output.transpose(0, 1)
-        # print("attn_output.shape: --------")
-        # print(attn_output.squeeze(-1).shape)
+        # print("attn_weights.shape: --------")
+        # print(attn_weights.shape)
+
         # 将注意力层的输出传递到后续层
         # 将attn_output和additional_data拼接
         # print(attn_output.squeeze(-1).shape)

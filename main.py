@@ -151,7 +151,10 @@ class Experiment:
             batchx2 = batch['x2']
             batchx3 = batch['x3']
             batchy = batch['y']
-            pred = cond_pred_model(batchx, batchx3, batchx2)[0]  # bs*1
+            model_forward = cond_pred_model(batchx, batchx3, batchx2)
+            pred = model_forward[0]  # bs*1
+            attn_weights = model_forward[1]
+            # print(attn_weights.shape)
             batchy = batchy.reshape(pred.shape)
             loss = lossfunc(pred, batchy)
 

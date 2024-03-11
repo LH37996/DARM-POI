@@ -71,7 +71,7 @@ class Data:
         allfeas = convert_list_with_nan(data['feature'].tolist())
         regfeas = [item[0] for item in allfeas]
         distances = [item[1] for item in allfeas]
-        intensities = [item[1] for item in allfeas]
+        intensities = [item[2] for item in allfeas]
         # return reg2id, trainids, sampids, trainregs, sampregs, regfeas.tolist()
         return trainids, sampids, trainregs, sampregs, regfeas, distances, intensities
 
