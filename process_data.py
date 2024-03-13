@@ -11,6 +11,49 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from scipy.spatial import Voronoi, voronoi_plot_2d
 import random
+import csv
+
+
+dataset = "FL_weekly"
+running_baseline = True
+
+
+# 新版本：实现了region对应
+def daily_summaries_latest_filter():
+    # 定义佛罗里达的经纬度范围
+    florida_bounds = {
+        "latitude_min": 24.545429,
+        "latitude_max": 30.997623,
+        "longitude_min": -87.518155,
+        "longitude_max": -80.032537
+    }
+
+    # 文件夹路径
+    input_folder = 'data/data_florida/daily-summaries-latest'
+    output_folder = 'daily_summaries_latest_filtered'
+
+    # 如果输出文件夹不存在，则创建它
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # 遍历文件夹中的所有文件
+    for file in os.listdir(input_folder):
+        if file.endswith('.csv'):
+            file_path = os.path.join(input_folder, file)
+            df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
+
+            # 筛选数据
+            filtered_df = df[
+                (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
+                (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
+                (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
+                (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
+                (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
+            ]
+
+            # 如果有符合条件的数据，将其保存到新文件夹
+            if not filtered_df.empty:
+                filtered_df.to_csv(os.path.join(output_folder, file), index=False)
 
 
 def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1):
@@ -64,11 +107,11 @@ def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1
     return aggregated_df
 
 
-def get_train_test(file_path):
+def get_train_test(file_path, data_folder_path):
     unique_regions = pd.read_csv(file_path)
     coordinates = unique_regions[['latitude', 'longitude']].values
 
-    # 仍然使用两个聚类
+    # 使用两个聚类
     n_clusters = 2
 
     # 应用 KMeans 聚类
@@ -85,8 +128,8 @@ def get_train_test(file_path):
     test_regions = unique_regions[unique_regions['cluster'] == smaller_cluster]['region_id'].tolist()
 
     # Saving the region IDs to JSON files
-    train_regions_file = 'data/data_florida/train_regs_region.json'
-    test_regions_file = 'data/data_florida/test_regs_region.json'
+    train_regions_file = data_folder_path + '/train_regs_region.json'
+    test_regions_file = data_folder_path + '/test_regs_region.json'
 
     with open(train_regions_file, 'w') as file:
         json.dump(train_regions, file)
@@ -111,7 +154,7 @@ def get_train_test(file_path):
 
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
-    plt.title('Geographical Distribution of Regions in Florida (Training vs Testing)')
+    plt.title('Geographical Distribution of Regions (Training vs Testing)')
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -186,113 +229,76 @@ def add_item_id_and_save(file_path):
     return data.head()  # Return the first few rows of the modified data for verification
 
 
-def aggregate_poi_visits(file_path, lat_delta, long_delta):
-    # 读取数据
-    data = pd.read_csv(file_path)
-
-    # 创建区域边界
-    lat_min, lat_max = data['latitude'].min(), data['latitude'].max()
-    long_min, long_max = data['longitude'].min(), data['longitude'].max()
-
-    # 计算区域划分
-    lat_bins = np.arange(lat_min, lat_max, lat_delta)
-    long_bins = np.arange(long_min, long_max, long_delta)
-
-    # 为每个POI分配区域编号
-    data['region_id'] = (
-        np.digitize(data['latitude'], lat_bins) * 1000 +
-        np.digitize(data['longitude'], long_bins)
-    )
-
-    # 计算每个区域编号对应区域中心的经纬度
-    region_centers = data.groupby('region_id')[['latitude', 'longitude']].mean().reset_index()
-    region_centers.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
-
-    # 在 split_and_balance_groups 函数之前获取 unique_regions
-    unique_regions = region_centers[['region_id', 'center_latitude', 'center_longitude']].drop_duplicates()
-
-    get_train_test(unique_regions)
-
-    # 读取训练和测试区域的编号
-    with open("data/data_florida/train_regs_region.json", 'r') as file:
-        train_regs = json.load(file)
-    with open("data/data_florida/test_regs_region.json", 'r') as file:
-        test_regs = json.load(file)
-
-    # 为每个数据点增加isTrain属性
-    data['isTrain'] = data['region_id'].apply(lambda x: 1 if x in train_regs else 0)
-
-    # 在每个组内按照主要类别聚合数据
-    monthly_columns = [col for col in data.columns if col.startswith('20')]
-    aggregated_data = data.groupby(['region_id', 'top_category'])[monthly_columns].sum().reset_index()
-
-    # 将区域中心的经纬度和isTrain属性合并进aggregated_data
-    aggregated_data = pd.merge(aggregated_data, region_centers, on='region_id')
-    aggregated_data = pd.merge(aggregated_data, data[['region_id', 'isTrain']].drop_duplicates(), on='region_id')
-
-    # 保存聚合后的数据到新的CSV文件
-    aggregated_csv_path = 'data/data_florida/aggregated_florida_visits.csv'
-    aggregated_data.to_csv(aggregated_csv_path, index=False)
-
-    # aggregated_florida_visits.csv -> aggregated_florida_visits.csv
-    sort_data_by_train_test("data/data_florida/aggregated_florida_visits.csv",
-                            "data/data_florida/aggregated_florida_visits.csv")
-
-    aggregated_data = pd.read_csv("data/data_florida/aggregated_florida_visits.csv")
-
-    # 重命名列和重新编号数据项
-    aggregated_data.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
-    aggregated_data['item_id'] = range(len(aggregated_data))
-
-    # 保存聚合后的数据到新的CSV文件
-    aggregated_csv_path = 'data/data_florida/aggregated_florida_visits.csv'
-    aggregated_data.to_csv(aggregated_csv_path, index=False)
-
-    # 记录相邻区域信息
-    region_ids = aggregated_data['region_id'].unique()
-    with open('data/data_florida/kg_region.txt', 'w') as f:
-        for i, rid1 in enumerate(region_ids):
-            for rid2 in region_ids[i + 1:]:
-                # 判断区域是否相邻
-                if abs(rid1 // 1000 - rid2 // 1000) <= 1 and abs(rid1 % 1000 - rid2 % 1000) <= 1:
-                    f.write(f"{rid1}\tNearBy\t{rid2}\n")
-
-# 新版本：实现了region对应
-def daily_summaries_latest_filter():
-    # 定义佛罗里达的经纬度范围
-    florida_bounds = {
-        "latitude_min": 24.545429,
-        "latitude_max": 30.997623,
-        "longitude_min": -87.518155,
-        "longitude_max": -80.032537
-    }
-
-    # 文件夹路径
-    input_folder = 'data/data_florida/daily-summaries-latest'
-    output_folder = 'daily_summaries_latest_filtered'
-
-    # 如果输出文件夹不存在，则创建它
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # 遍历文件夹中的所有文件
-    for file in os.listdir(input_folder):
-        if file.endswith('.csv'):
-            file_path = os.path.join(input_folder, file)
-            df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
-
-            # 筛选数据
-            filtered_df = df[
-                (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
-                (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
-                (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
-            ]
-
-            # 如果有符合条件的数据，将其保存到新文件夹
-            if not filtered_df.empty:
-                filtered_df.to_csv(os.path.join(output_folder, file), index=False)
+# def aggregate_poi_visits(file_path, lat_delta, long_delta):
+#     # 读取数据
+#     data = pd.read_csv(file_path)
+#
+#     # 创建区域边界
+#     lat_min, lat_max = data['latitude'].min(), data['latitude'].max()
+#     long_min, long_max = data['longitude'].min(), data['longitude'].max()
+#
+#     # 计算区域划分
+#     lat_bins = np.arange(lat_min, lat_max, lat_delta)
+#     long_bins = np.arange(long_min, long_max, long_delta)
+#
+#     # 为每个POI分配区域编号
+#     data['region_id'] = (
+#         np.digitize(data['latitude'], lat_bins) * 1000 +
+#         np.digitize(data['longitude'], long_bins)
+#     )
+#
+#     # 计算每个区域编号对应区域中心的经纬度
+#     region_centers = data.groupby('region_id')[['latitude', 'longitude']].mean().reset_index()
+#     region_centers.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
+#
+#     # 在 split_and_balance_groups 函数之前获取 unique_regions
+#     unique_regions = region_centers[['region_id', 'center_latitude', 'center_longitude']].drop_duplicates()
+#
+#     get_train_test(unique_regions)
+#
+#     # 读取训练和测试区域的编号
+#     with open("data/data_florida/train_regs_region.json", 'r') as file:
+#         train_regs = json.load(file)
+#     with open("data/data_florida/test_regs_region.json", 'r') as file:
+#         test_regs = json.load(file)
+#
+#     # 为每个数据点增加isTrain属性
+#     data['isTrain'] = data['region_id'].apply(lambda x: 1 if x in train_regs else 0)
+#
+#     # 在每个组内按照主要类别聚合数据
+#     monthly_columns = [col for col in data.columns if col.startswith('20')]
+#     aggregated_data = data.groupby(['region_id', 'top_category'])[monthly_columns].sum().reset_index()
+#
+#     # 将区域中心的经纬度和isTrain属性合并进aggregated_data
+#     aggregated_data = pd.merge(aggregated_data, region_centers, on='region_id')
+#     aggregated_data = pd.merge(aggregated_data, data[['region_id', 'isTrain']].drop_duplicates(), on='region_id')
+#
+#     # 保存聚合后的数据到新的CSV文件
+#     aggregated_csv_path = 'data/data_florida/aggregated_florida_visits.csv'
+#     aggregated_data.to_csv(aggregated_csv_path, index=False)
+#
+#     # aggregated_florida_visits.csv -> aggregated_florida_visits.csv
+#     sort_data_by_train_test("data/data_florida/aggregated_florida_visits.csv",
+#                             "data/data_florida/aggregated_florida_visits.csv")
+#
+#     aggregated_data = pd.read_csv("data/data_florida/aggregated_florida_visits.csv")
+#
+#     # 重命名列和重新编号数据项
+#     aggregated_data.rename(columns={'latitude': 'center_latitude', 'longitude': 'center_longitude'}, inplace=True)
+#     aggregated_data['item_id'] = range(len(aggregated_data))
+#
+#     # 保存聚合后的数据到新的CSV文件
+#     aggregated_csv_path = 'data/data_florida/aggregated_florida_visits.csv'
+#     aggregated_data.to_csv(aggregated_csv_path, index=False)
+#
+#     # 记录相邻区域信息
+#     region_ids = aggregated_data['region_id'].unique()
+#     with open('data/data_florida/kg_region.txt', 'w') as f:
+#         for i, rid1 in enumerate(region_ids):
+#             for rid2 in region_ids[i + 1:]:
+#                 # 判断区域是否相邻
+#                 if abs(rid1 // 1000 - rid2 // 1000) <= 1 and abs(rid1 % 1000 - rid2 % 1000) <= 1:
+#                     f.write(f"{rid1}\tNearBy\t{rid2}\n")
 
 
 def count_wsf2_in_files():
@@ -375,31 +381,25 @@ def filter_csv_files():
 
 
 
-
-def filter_non_zero_rows(year, start_month, end_month):
-    """
-    Filters rows where all the specified monthly columns are non-zero.
-
-    :param df: DataFrame to be filtered.
-    :param year: Year for which the months are considered.
-    :param start_month: Starting month (inclusive).
-    :param end_month: Ending month (inclusive).
-    :return: Filtered DataFrame.
-    """
+def filter_non_zero_rows(dataset, file_path, year, start_month=1, end_month=12):
     # Load the provided CSV file
-    file_path = 'data/data_florida/Florida_visits_2019_2020.csv'
     df = pd.read_csv(file_path)
 
     # Create a list of column names for the specified months
-    month_columns = [f"{year}-{str(month).zfill(2)}" for month in range(start_month, end_month + 1)]
+    if dataset == "FL_monthly":
+        columns_to_check = [f"{year}-{str(month).zfill(2)}" for month in range(start_month, end_month + 1)]
+    elif dataset == "FL_weekly":
+        columns_to_check = [col for col in df.columns if col.startswith(str(year))]
+    elif dataset == "SC_weekly":
+        columns_to_check = [col for col in df.columns if col.startswith(str(year))]
 
     # Filter rows where all specified month columns are non-zero
-    filtered_df = df[df[month_columns].all(axis=1)]
+    filtered_df = df[(df[columns_to_check] != 0.0).all(axis=1)]
 
     return filtered_df
 
 
-def remove_rows_with_too_large_data(file_path):
+def remove_rows_with_too_large_data(dataset, file_path):
     """
     Remove rows with any value greater than 100000 in the monthly visit columns
     and save the modified data back to the same CSV file.
@@ -411,7 +411,12 @@ def remove_rows_with_too_large_data(file_path):
     df = pd.read_csv(file_path)
 
     # Define the criteria for rows to keep (those with all values <= 100000 in the monthly visit columns)
-    criteria = (df.loc[:, '2019-01':'2019-12'] <= 10000).all(axis=1)
+    if dataset == "FL_monthly":
+        criteria = (df.loc[:, '2019-01':'2019-12'] <= 10000).all(axis=1)
+    elif dataset == "FL_weekly":
+        criteria = (df.loc[:, '2019-01-07':'2019-09-30'] <= 10000).all(axis=1)
+    elif dataset == "SC_weekly":
+        criteria = (df.loc[:, '2018-01-01':'2018-10-08'] <= 10000).all(axis=1)
 
     # Keep only the rows that meet the criteria
     modified_df = df[criteria]
@@ -422,24 +427,44 @@ def remove_rows_with_too_large_data(file_path):
     return f"Updated data saved to {file_path}. Removed {df.shape[0] - modified_df.shape[0]} rows."
 
 
-def florida_visits_filter():
+def initial_file_filter(origin_path, target_path, data_count):
     # 洗florida的POI访问数据
-    filtered_florida_visits = filter_non_zero_rows(2019, 1, 12)
-    filtered_file_path = 'data/data_florida/Florida_visits_filtered.csv'
+    filtered_florida_visits = filter_non_zero_rows(dataset, origin_path, 2019)
+    filtered_file_path = target_path
     # Save the filtered data to a new CSV file
     filtered_florida_visits.to_csv(filtered_file_path, index=False)
-    remove_rows_with_too_large_data(filtered_file_path)
+    remove_rows_with_too_large_data(dataset, filtered_file_path)
 
     # 减少数据
-    file_path = 'data/data_florida/Florida_visits_filtered.csv'
+    file_path = target_path
     florida_visits = pd.read_csv(file_path)
     # Calculating the mean visitation for each place in 2019
-    columns_2019 = [col for col in florida_visits if col.startswith('2019')]
-    florida_visits['2019_mean'] = florida_visits[columns_2019].mean(axis=1)
+    columns_used = []
+    if dataset == "FL_monthly":
+        columns_used = [col for col in florida_visits if col.startswith('2019')]
+    elif dataset == "FL_weekly":
+        columns_used = [col for col in florida_visits if (col.startswith('2019-01')
+                                                       or col.startswith('2019-02')
+                                                       or col.startswith('2019-03')
+                                                       or col.startswith('2019-04')
+                                                       or col.startswith('2019-05')
+                                                       or col.startswith('2019-06')
+                                                       or col.startswith('2019-07')
+                                                       or col.startswith('2019-08'))]
+    elif dataset == "SC_weekly":
+        columns_used =[col for col in florida_visits if (col.startswith('2018-01')
+                                                      or col.startswith('2018-02')
+                                                      or col.startswith('2018-03')
+                                                      or col.startswith('2018-04')
+                                                      or col.startswith('2018-05')
+                                                      or col.startswith('2018-06')
+                                                      or col.startswith('2018-07')
+                                                      or col.startswith('2018-08'))]
+    florida_visits['normal_mean'] = florida_visits[columns_used].mean(axis=1)
     # Sorting the dataframe by the mean visitation in 2019 and retaining the top 200000 entries
-    sorted_florida_visits = florida_visits.sort_values(by='2019_mean').head(30000)
+    sorted_florida_visits = florida_visits.sort_values(by='normal_mean').head(data_count)
     # Saving the sorted dataframe to a new CSV file
-    sorted_file_path = 'data/data_florida/Florida_visits_filtered.csv'
+    sorted_file_path = target_path
     sorted_florida_visits.to_csv(sorted_file_path, index=False)
 
 
@@ -560,7 +585,7 @@ def process_weather_data_to_list(folder_path):
     return observation_intensity_list, observation_latitude_list, observation_longitude_list
 
 
-def get_poi_lat_long_list(csv_file_path):
+def get_poi_lat_long_list(csv_file_path, data_folder_path):
     # 读取CSV文件
     df = pd.read_csv(csv_file_path)
 
@@ -575,7 +600,7 @@ def get_poi_lat_long_list(csv_file_path):
     poi_index_list = df['item_id'].tolist()
 
     # 将item_id保存到JSON文件
-    json_file_path = 'data/data_florida/poi_index_list.json'
+    json_file_path = data_folder_path + '/poi_index_list.json'
     with open(json_file_path, 'w') as file:
         json.dump(poi_index_list, file)
 
@@ -599,7 +624,13 @@ def haversine(lon1, lat1, lon2, lat2):
     return c * r
 
 # Load the aggregated_florida_visits.csv file to get the latitude and longitude range
-florida_visits_file = 'data/data_florida/Florida_visits_2019_2020.csv'
+florida_visits_file = ""
+if dataset == "FL_monthly":
+    florida_visits_file = 'data/data_florida/Florida_visits_2019_2020.csv'
+elif dataset == "FL_weekly":
+    florida_visits_file = 'data/data_FL_weekly/FL_weekly_visits_2019.csv'
+elif dataset == "SC_weekly":
+    florida_visits_file = 'data/data_SC_weekly/SC_weekly_visits_2018_2019.csv'
 florida_visits_df = pd.read_csv(florida_visits_file)
 # Calculating the latitude and longitude range for Florida
 min_latitude = florida_visits_df['latitude'].min()
@@ -613,10 +644,21 @@ florida_lat_lon_range = {
     "max_longitude": max_longitude
 }
 
-observation_intensity_list, observation_latitude_list, observation_longitude_list = (
-    # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
-    process_weather_station_data("data/data_florida/daily_summaries_latest_filtered_wsf2", florida_lat_lon_range)
-)
+if dataset == "FL_monthly":
+    observation_intensity_list, observation_latitude_list, observation_longitude_list = (
+        # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
+        process_weather_station_data("data/data_florida/daily_summaries_latest_filtered_wsf2", florida_lat_lon_range)
+    )
+elif dataset == "FL_weekly":
+    observation_intensity_list, observation_latitude_list, observation_longitude_list = (
+        # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
+        process_weather_station_data("data/data_FL_weekly/daily_summaries_latest_filtered_wsf2", florida_lat_lon_range)
+    )
+elif dataset == "SC_weekly":
+    observation_intensity_list, observation_latitude_list, observation_longitude_list = (
+        # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
+        process_weather_station_data("data/data_SC_weekly/daily_summaries_latest_filtered_wsf2", florida_lat_lon_range)
+    )
 
 def calculate_poi_intensity(poi):
     poi_lat, poi_lon = poi
@@ -697,8 +739,8 @@ def add_intensity_to_csv(csv_file_path, intensity_list):
     return new_csv_file_path
 
 
-def get_poi_intensity(file_path):
-    poi_latitude_list, poi_longitude_list = get_poi_lat_long_list(file_path)
+def get_poi_intensity(file_path, data_folder_path):
+    poi_latitude_list, poi_longitude_list = get_poi_lat_long_list(file_path, data_folder_path)
     poi_intensity_list = disaster_intensity_mapping(
         poi_latitude_list, poi_longitude_list
     )
@@ -737,8 +779,8 @@ def add_distance_to_csv(csv_file_path, distances_list):
     return new_csv_file_path
 
 
-def get_distance(file_path):
-    poi_latitude_list, poi_longitude_list = get_poi_lat_long_list(file_path)
+def get_distance(file_path, data_folder_path):
+    poi_latitude_list, poi_longitude_list = get_poi_lat_long_list(file_path, data_folder_path)
     distances_list = distance_mapping(
         poi_latitude_list, poi_longitude_list
     )
@@ -765,7 +807,37 @@ def get_poi_feature_add_to_csv(file_path):
 def get_poi_feature_add_to_csv_distance(file_path):
     data = pd.read_csv(file_path)
     # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
-    average_visits = data[['2019-01', '2019-02', '2019-03', '2019-04', '2019-05', '2019-06', '2019-07', '2019-08']].mean(axis=1)
+    columns_used = []
+    if dataset == "FL_monthly":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                             or col.startswith('2019-02')
+                                             or col.startswith('2019-03')
+                                             or col.startswith('2019-04')
+                                             or col.startswith('2019-05')
+                                             or col.startswith('2019-06')
+                                             or col.startswith('2019-07')
+                                             or col.startswith('2019-08'))]
+    elif dataset == "FL_weekly":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                             or col.startswith('2019-02')
+                                             or col.startswith('2019-03')
+                                             or col.startswith('2019-04')
+                                             or col.startswith('2019-05')
+                                             or col.startswith('2019-06')
+                                             or col.startswith('2019-07')
+                                             or col.startswith('2019-08'))]
+    elif dataset == "SC_weekly":
+        columns_used = [col for col in data if (col.startswith('2018-01')
+                                             or col.startswith('2018-02')
+                                             or col.startswith('2018-03')
+                                             or col.startswith('2018-04')
+                                             or col.startswith('2018-05')
+                                             or col.startswith('2018-06')
+                                             or col.startswith('2018-07')
+                                             or col.startswith('2018-08'))]
+
+    average_visits = data[columns_used].mean(axis=1)
+
     # Step 2: Normalize the average visits and the Intensity
     normalized_visits = (average_visits - average_visits.min()) / (average_visits.max() - average_visits.min())
     def to_list(data_D):
@@ -794,8 +866,8 @@ def get_poi_feature_add_to_csv_distance(file_path):
     data.to_csv(new_file_path, index=False)
 
 
-def process_kg(csv_file_path):
-    kg_region_data = pd.read_csv('data/data_florida/kg_region.txt', sep='\t', header=None,
+def process_kg(csv_file_path, path_to_kg_region):
+    kg_region_data = pd.read_csv(path_to_kg_region, sep='\t', header=None,
                                  names=['region_id_1', 'relation', 'region_id_2'])
     florida_visits_data = pd.read_csv(csv_file_path)
 
@@ -907,13 +979,16 @@ def sort_data_by_train_test(file_path, output_file_path):
     return output_file_path
 
 
-def sort_train_test_regs():
+def sort_train_test_regs(data_folder_path):
+    train_file_path = data_folder_path + '/train_regs.json'
+    test_file_path = data_folder_path + '/test_regs.json'
+
     # Load the first file (train_regs.json)
-    with open('data/data_florida/train_regs.json', 'r') as file:
+    with open(train_file_path, 'r') as file:
         train_data = json.load(file)
 
     # Load the second file (test_regs.json)
-    with open('data/data_florida/test_regs.json', 'r') as file:
+    with open(test_file_path, 'r') as file:
         test_data = json.load(file)
 
     # Sorting the data in ascending order
@@ -921,8 +996,6 @@ def sort_train_test_regs():
     test_data_sorted = sorted(test_data)
 
     # Writing the sorted data back to the original files
-    train_file_path = 'data/data_florida/train_regs.json'
-    test_file_path = 'data/data_florida/test_regs.json'
 
     with open(train_file_path, 'w') as file:
         json.dump(train_data_sorted, file)
@@ -931,7 +1004,7 @@ def sort_train_test_regs():
         json.dump(test_data_sorted, file)
 
 
-def get_kg(file_path):
+def get_kg(file_path, data_folder_path):
     florida_poi_data = pd.read_csv(file_path)
     # Extract relevant columns for Voronoi tessellation
     coordinates = florida_poi_data[['latitude', 'longitude']].values
@@ -962,7 +1035,7 @@ def get_kg(file_path):
             kg_data.append(f"{region}\tNearBy\t{neighbor}")
 
     # Define the path for the kg.txt file
-    kg_file_path = 'data/data_florida/kg.txt'
+    kg_file_path = data_folder_path + '/kg.txt'
 
     # Write the adjacency information to the kg.txt file
     with open(kg_file_path, 'w') as file:
@@ -1015,15 +1088,56 @@ def get_ratio(file_path, output_path):
     # Step 1: Read the data
     data = pd.read_csv(file_path)
 
-    # Step 2: Calculate the mean of POI visits from January to August 2019
-    months_2019 = [f"2019-{str(month).zfill(2)}" for month in range(1, 9)]
-    data['mean_Jan_to_Aug'] = data[months_2019].mean(axis=1)
+    # Step 2: Calculate the mean of POI visits
+    columns_used = []
+    if dataset == "FL_monthly":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                             or col.startswith('2019-02')
+                                             or col.startswith('2019-03')
+                                             or col.startswith('2019-04')
+                                             or col.startswith('2019-05')
+                                             or col.startswith('2019-06')
+                                             or col.startswith('2019-07')
+                                             or col.startswith('2019-08'))]
+    elif dataset == "FL_weekly":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                             or col.startswith('2019-02')
+                                             or col.startswith('2019-03')
+                                             or col.startswith('2019-04')
+                                             or col.startswith('2019-05')
+                                             or col.startswith('2019-06')
+                                             or col.startswith('2019-07')
+                                             or col.startswith('2019-08'))]
+    elif dataset == "SC_weekly":
+        columns_used = [col for col in data if (col.startswith('2018-01')
+                                             or col.startswith('2018-02')
+                                             or col.startswith('2018-03')
+                                             or col.startswith('2018-04')
+                                             or col.startswith('2018-05')
+                                             or col.startswith('2018-06')
+                                             or col.startswith('2018-07')
+                                             or col.startswith('2018-08'))]
+
+    data['mean_Jan_to_Aug'] = data[columns_used].mean(axis=1)
 
     # Step 3: Update the values for September to December 2019
-    for month in range(9, 13):
-        month_col = f"2019-{str(month).zfill(2)}"
-        last_month_col = f"2019-{str(month - 1).zfill(2)}"
-        data[month_col] = (data[month_col] - data[last_month_col]) / data['mean_Jan_to_Aug']
+    if dataset == "FL_monthly":
+        for month in range(9, 13):
+            month_col = f"2019-{str(month).zfill(2)}"
+            last_month_col = f"2019-{str(month - 1).zfill(2)}"
+            data[month_col] = (data[month_col] - data[last_month_col]) / data['mean_Jan_to_Aug']
+    elif dataset == "FL_weekly":
+        for month in range(5):
+            week_col = "2019-09-02"
+            index = data.columns.get_loc(week_col)
+            last_week_col = data.columns[index - 1]
+            data[week_col] = (data[week_col] - data[last_week_col]) / data['mean_Jan_to_Aug']
+    elif dataset == "SC_weekly":
+        for month in range(4):
+            week_col = "2018-09-17"
+            index = data.columns.get_loc(week_col)
+            last_week_col = data.columns[index - 1]
+            data[week_col] = (data[week_col] - data[last_week_col]) / data['mean_Jan_to_Aug']
 
     # Step 4: Save the modified data to a new file
     data.to_csv(output_path, index=False)
@@ -1033,12 +1147,8 @@ def get_ratio(file_path, output_path):
 def remove_duplicates_in_train_test_and_save(file_path):
     """
     Function to remove duplicates from a list stored in a JSON file and save the results back to the same file.
-
     Parameters:
     file_path (str): Path to the JSON file containing the list.
-
-    Returns:
-    None
     """
     # Load the list from the file
     with open(file_path, 'r') as file:
@@ -1050,11 +1160,6 @@ def remove_duplicates_in_train_test_and_save(file_path):
     # Save the list back to the file
     with open(file_path, 'w') as file:
         json.dump(data_list, file, indent=4)
-
-
-import pandas as pd
-import csv
-import os
 
 
 def update_weekly_visits(visits_csv_path, weekly_data_dir):
@@ -1092,15 +1197,17 @@ def update_weekly_visits(visits_csv_path, weekly_data_dir):
 
 
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
-def process_data_monthly(dataset):
-    if dataset == "florida":
-        # Florida_visits_2019_2020.csv -> Florida_visits_filtered.csv
-        florida_visits_filter()
+def process_data():
+    if dataset == "FL_monthly":
+        initial_file_filter('data/data_florida/Florida_visits_2019_2020.csv',
+                            "data/data_florida/Florida_visits_filtered.csv",
+                            30000)
 
         add_region_id_and_save("data/data_florida/Florida_visits_filtered.csv",
                                "data/data_florida/Florida_visits_filtered_with_region_id.csv")
 
-        get_train_test("data/data_florida/Florida_visits_filtered_with_region_id.csv")
+        get_train_test("data/data_florida/Florida_visits_filtered_with_region_id.csv",
+                       "data/data_florida")
 
         reorder_csv_and_add_isTrain("data/data_florida/train_regs_region.json",
                                     "data/data_florida/test_regs_region.json",
@@ -1114,16 +1221,19 @@ def process_data_monthly(dataset):
         #                      lat_delta, long_delta)
 
         # aggregated_florida_visits.csv -> aggregated_florida_visits_with_intensity.csv
-        # get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        # get_poi_intensity("data/data_florida/Florida_visits_reordered_with_isTrain.csv",
+        #                   "data/data_florida")
         # Florida_visits_reordered_with_isTrain.csv.csv -> Florida_visits_reordered_with_distance.csv
-        get_distance("data/data_florida/Florida_visits_reordered_with_isTrain.csv")
+        get_distance("data/data_florida/Florida_visits_reordered_with_isTrain.csv",
+                     "data/data_florida")
 
 
         # GHANGED AND CHANGE_THE_FUNCTION! aggregated_florida_visits_with_intensity.csv -> aggregated_florida_visits_with_feature.csv
         get_poi_feature_add_to_csv_distance("data/data_florida/Florida_visits_reordered_with_isTrain_with_distance.csv")
 
         # process_kg()
-        get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv")
+        get_kg("data/data_florida/Florida_visits_reordered_with_isTrain_with_intensity.csv",
+               'data/data_florida')
 
         remove_duplicate_kg_data("data/data_florida/kg.txt")
 
@@ -1139,79 +1249,69 @@ def process_data_monthly(dataset):
 
         remove_duplicates_in_train_test_and_save("data/data_florida/train_regs.json")
         remove_duplicates_in_train_test_and_save("data/data_florida/test_regs.json")
-        sort_train_test_regs()
-    elif dataset == "SC":
-        pass
+        sort_train_test_regs("data/data_florida")
 
+    elif dataset == "FL_weekly":
+        initial_file_filter('data/data_FL_weekly/FL_weekly_visits_2019.csv',
+                            "data/data_FL_weekly/FL_weekly_visits_filtered.csv",
+                            30000)
+        add_region_id_and_save("data/data_FL_weekly/FL_weekly_visits_filtered.csv",
+                               "data/data_FL_weekly/FL_weekly_visits_filtered_with_region_id.csv")
+        get_train_test("data/data_FL_weekly/FL_weekly_visits_filtered_with_region_id.csv",
+                       "data/data_FL_weekly")
+        reorder_csv_and_add_isTrain("data/data_FL_weekly/train_regs_region.json",
+                                    "data/data_FL_weekly/test_regs_region.json",
+                                    "data/data_FL_weekly/FL_weekly_visits_filtered_with_region_id.csv",
+                                    "data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv")
+        add_item_id_and_save("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv")
+        get_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv",
+                     "data/data_FL_weekly")
+        get_poi_feature_add_to_csv_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_distance.csv")
+        get_kg("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv",
+               'data/data_FL_weekly')
+        remove_duplicate_kg_data("data/data_FL_weekly/kg.txt")
+        if not running_baseline:
+            get_ratio("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv",
+                  "data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_FL_weekly/train_regs_region.json",
+                                       "data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_FL_weekly/test_regs_region.json",
+                                       "data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        remove_duplicates_in_train_test_and_save("data/data_FL_weekly/train_regs.json")
+        remove_duplicates_in_train_test_and_save("data/data_FL_weekly/test_regs.json")
+        sort_train_test_regs("data/data_FL_weekly")
 
-# def process_file(args):
-#     """
-#     处理单个文件，提取每个placekey的normalized_visits_by_state_scaling数据。
-#     参数:
-#     - args: 包含文件路径和所有placekeys的元组。
-#     返回:
-#     - 一个字典，包含每个placekey及其对应的周访问数据列表。
-#     """
-#     file_path, placekeys = args
-#     weekly_visits_dict = {placekey: [] for placekey in placekeys}
-#
-#     try:
-#         week_data = pd.read_csv(file_path)
-#         for placekey in tqdm(placekeys):
-#             if placekey in week_data['placekey'].values:
-#                 row = week_data.loc[week_data['placekey'] == placekey]
-#                 if 'normalized_visits_by_state_scaling' in row.columns and not pd.isna(
-#                         row['normalized_visits_by_state_scaling'].iloc[0]):
-#                     weekly_visits_dict[placekey].append(row['normalized_visits_by_state_scaling'].iloc[0])
-#     except Exception as e:
-#         print(f"Error processing file {os.path.basename(file_path)}: {e}")
-#
-#     return weekly_visits_dict
-#
-#
-# def process_and_save_weekly_visits(weekly_folder, csv_path, output_path):
-#     """
-#     处理POI的周访问数据并保存更新后的CSV文件，使用并行逻辑加速处理。
-#
-#     参数:
-#     - zip_path: 周访问数据zip文件的路径。
-#     - csv_path: 原始Florida_visits_2019_2020.csv文件的路径。
-#     - output_path: 更新后的CSV文件要保存的路径。
-#     """
-#
-#     florida_visits_df = pd.read_csv(csv_path)
-#     placekeys = florida_visits_df['placekey'].tolist()
-#
-#     # 准备处理文件的参数列表
-#     files_to_process = [(os.path.join(weekly_folder, f), placekeys) for f in sorted(os.listdir(weekly_folder)) if
-#                         f.endswith('.csv')]
-#
-#     # 使用多进程池处理文件
-#     with ProcessPoolExecutor() as executor:
-#         results = list(tqdm(executor.map(process_file, files_to_process)))
-#
-#     # 合并结果
-#     weekly_visits_dict = {placekey: [] for placekey in placekeys}
-#     for result in results:
-#         for placekey, visits in result.items():
-#             weekly_visits_dict[placekey].extend(visits)
-#
-#     # 更新DataFrame
-#     florida_visits_df['Weekly'] = florida_visits_df['placekey'].apply(lambda pk: weekly_visits_dict.get(pk, []))
-#
-#     # 保存到新文件
-#     florida_visits_df.to_csv(output_path, index=False)
-#
-#     print("Process completed and file saved.")
-    
-
-def process_data_weekly(dataset):
-    if dataset == "florida":
-        pass
-    if dataset == "SC":
-        pass
+    elif dataset == "SC_weekly":
+        initial_file_filter('data/data_SC_weekly/SC_weekly_visits_2018_2019.csv',
+                            "data/data_SC_weekly/SC_weekly_visits_filtered.csv",
+                            30000)
+        add_region_id_and_save("data/data_SC_weekly/SC_weekly_visits_filtered.csv",
+                               "data/data_SC_weekly/SC_weekly_visits_filtered_with_region_id.csv")
+        get_train_test("data/data_SC_weekly/SC_weekly_visits_filtered_with_region_id.csv",
+                       "data/data_SC_weekly")
+        reorder_csv_and_add_isTrain("data/data_SC_weekly/train_regs_region.json",
+                                    "data/data_SC_weekly/test_regs_region.json",
+                                    "data/data_SC_weekly/SC_weekly_visits_filtered_with_region_id.csv",
+                                    "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv")
+        add_item_id_and_save("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv")
+        get_distance("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv",
+                     "data/data_SC_weekly")
+        get_poi_feature_add_to_csv_distance(
+            "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_distance.csv")
+        get_kg("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv",
+               'data/data_SC_weekly')
+        remove_duplicate_kg_data("data/data_SC_weekly/kg.txt")
+        if not running_baseline:
+            get_ratio("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv",
+                      "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_SC_weekly/train_regs_region.json",
+                                       "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        replace_region_id_with_item_id("data/data_SC_weekly/test_regs_region.json",
+                                       "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        remove_duplicates_in_train_test_and_save("data/data_SC_weekly/train_regs.json")
+        remove_duplicates_in_train_test_and_save("data/data_SC_weekly/test_regs.json")
+        sort_train_test_regs("data/data_SC_weekly")
 
 
 if __name__ == '__main__':
-    # process_data_monthly("florida")
-    process_data_weekly("florida")
+    process_data()

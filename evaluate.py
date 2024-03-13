@@ -8,8 +8,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore')
 
-dataset='florida' ##################### modify the dataset here
-filepath='./data/data_{}/'.format(dataset)
+dataset = 'FL_weekly' ##################### modify the dataset here
+running_baseline = True
+
+filepath = './data/data_{}/'.format(dataset)
 resultpath = './output/output_{}/'.format(dataset)
 assert os.path.exists(resultpath)
 
@@ -90,7 +92,13 @@ def plot_results(flattened_pred_flow, flattened_test_reg_flow):
     # plt.show()
     plt.savefig('output/result_florida.png')
 
-file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
+file_path = ''
+if dataset == 'florida':
+    file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
+elif dataset == 'FL_weekly':
+    file_path = 'data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv'
+elif dataset == 'SC_weekly':
+    file_path = 'data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv'
 florida_visits_df = pd.read_csv(file_path)
 
 def extract_monthly_data(df, year, months):
@@ -115,12 +123,13 @@ extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 
 mean_Jan_to_Aug = florida_visits_df["mean_Jan_to_Aug"].values.tolist()
 data_2019_08 = florida_visits_df["2019-08"].values.tolist()
 socall_nreg = len(extracted_2019_data)
-for i in range(socall_nreg):
-    for j in range(4):
-        extracted_2019_data[i][j] *= mean_Jan_to_Aug[i]
-    extracted_2019_data[i][0] += data_2019_08[i]
-    for j in range(1, 4):
-        extracted_2019_data[i][j] += extracted_2019_data[i][j - 1]
+if not running_baseline:
+    for i in range(socall_nreg):
+        for j in range(4):
+            extracted_2019_data[i][j] *= mean_Jan_to_Aug[i]
+        extracted_2019_data[i][0] += data_2019_08[i]
+        for j in range(1, 4):
+            extracted_2019_data[i][j] += extracted_2019_data[i][j - 1]
 three_dim_list = []
 for i in range(20):
     three_dim_list.append(extracted_2019_data)
@@ -185,8 +194,8 @@ for bs in range(len(pred)):
             pred[bs][sampid - trainlen][i][0] += pred[bs][sampid - trainlen][i - 1][0]
 
 pred_flow=np.mean(pred,0)
-print(pred_flow[105])
-print(test_reg_flow[105])
+# print(pred_flow[105])
+# print(test_reg_flow[105])
 plot_results(pred_flow.flatten(), test_reg_flow.flatten())
 rmse=metrics.mean_squared_error(pred_flow.flatten(),test_reg_flow.flatten(),squared=False)
 mae=metrics.mean_absolute_error(pred_flow.flatten(),test_reg_flow.flatten())
