@@ -18,44 +18,6 @@ dataset = "FL_weekly"
 running_baseline = True
 
 
-# 新版本：实现了region对应
-def daily_summaries_latest_filter():
-    # 定义佛罗里达的经纬度范围
-    florida_bounds = {
-        "latitude_min": 24.545429,
-        "latitude_max": 30.997623,
-        "longitude_min": -87.518155,
-        "longitude_max": -80.032537
-    }
-
-    # 文件夹路径
-    input_folder = 'data/data_florida/daily-summaries-latest'
-    output_folder = 'daily_summaries_latest_filtered'
-
-    # 如果输出文件夹不存在，则创建它
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # 遍历文件夹中的所有文件
-    for file in os.listdir(input_folder):
-        if file.endswith('.csv'):
-            file_path = os.path.join(input_folder, file)
-            df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
-
-            # 筛选数据
-            filtered_df = df[
-                (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
-                (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
-                (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
-            ]
-
-            # 如果有符合条件的数据，将其保存到新文件夹
-            if not filtered_df.empty:
-                filtered_df.to_csv(os.path.join(output_folder, file), index=False)
-
-
 def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1):
     # Load the POI data
     poi_data = pd.read_csv(florida_visits_path)
@@ -359,9 +321,9 @@ def count_wsf2_items():
     print(total_items)
 
 
-def filter_csv_files():
-    source_folder = "data/data_florida/daily_summaries_latest_filtered"
-    destination_folder = "data/data_florida/daily_summaries_latest_filtered_wsf2"
+def filter_csv_files(data_folder_path):
+    source_folder = data_folder_path + "/daily_summaries_latest_filtered"
+    destination_folder = data_folder_path + "/daily_summaries_latest_filtered_wsf2"
     # Create the destination folder if it doesn't exist
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
@@ -380,6 +342,52 @@ def filter_csv_files():
                 print(f"Error processing file {file}: {e}")
 
 
+# 新版本：实现了region对应
+def daily_summaries_latest_state_filter(data_folder_path, latitude_min, latitude_max, longitude_min, longitude_max):
+    # 定义FL或者SC的经纬度范围
+    florida_bounds = {
+        "latitude_min": latitude_min,
+        "latitude_max": latitude_max,
+        "longitude_min": longitude_min,
+        "longitude_max": longitude_max
+    }
+
+    # 文件夹路径
+    input_folder = data_folder_path + '/daily-summaries-latest'
+    output_folder = data_folder_path + 'daily_summaries_latest_filtered'
+
+    # 如果输出文件夹不存在，则创建它
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # 遍历文件夹中的所有文件
+    for file in os.listdir(input_folder):
+        if file.endswith('.csv'):
+            file_path = os.path.join(input_folder, file)
+            df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
+
+            # 筛选数据
+            filtered_df = df[
+                (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
+                (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
+                (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
+                (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
+                (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
+                ]
+
+            # 如果有符合条件的数据，将其保存到新文件夹
+            if not filtered_df.empty:
+                filtered_df.to_csv(os.path.join(output_folder, file), index=False)
+
+
+def daily_summaries_latest_filter(data_folder_path):
+    daily_summaries_latest_state_filter(data_folder_path,
+                                        24.545429,  # latitude_min
+                                        30.997623,  # latitude_max
+                                        -87.518155,  # longitude_min
+                                        -80.032537   # longitude_max
+                                        )
+    filter_csv_files(data_folder_path)
 
 def filter_non_zero_rows(dataset, file_path, year, start_month=1, end_month=12):
     # Load the provided CSV file
