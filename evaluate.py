@@ -180,13 +180,14 @@ print(len(pred[0][0]))
 print(trainlen)
 print(testlen)
 
-for bs in range(len(pred)):
-    for sampid in sampids:
-        for i in range(4):
-            pred[bs][sampid - trainlen][i][0] *= mean_Jan_to_Aug[sampid]
-        pred[bs][sampid - trainlen][0][0] += data_2019_08[sampid]
-        for i in range(1, 4):
-            pred[bs][sampid - trainlen][i][0] += pred[bs][sampid - trainlen][i - 1][0]
+if not running_baseline:
+    for bs in range(len(pred)):
+        for sampid in sampids:
+            for i in range(4):
+                pred[bs][sampid - trainlen][i][0] *= mean_Jan_to_Aug[sampid]
+            pred[bs][sampid - trainlen][0][0] += data_2019_08[sampid]
+            for i in range(1, 4):
+                pred[bs][sampid - trainlen][i][0] += pred[bs][sampid - trainlen][i - 1][0]
 
 pred_flow=np.mean(pred,0)
 # print(pred_flow[105])
