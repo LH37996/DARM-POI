@@ -714,6 +714,10 @@ florida_lat_lon_range = {
     "max_longitude": max_longitude
 }
 
+observation_intensity_list = []
+observation_latitude_list = []
+observation_longitude_list = []
+
 if dataset == "florida":
     observation_intensity_list, observation_latitude_list, observation_longitude_list = (
         # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
@@ -861,7 +865,36 @@ def get_distance(file_path, data_folder_path):
 def get_poi_feature_add_to_csv(file_path):
     data = pd.read_csv(file_path)
     # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
-    average_visits = data[['2019-01', '2019-02', '2019-03', '2019-04', '2019-05', '2019-06', '2019-07', '2019-08']].mean(axis=1)
+    columns_used = []
+    if dataset == "florida":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                                or col.startswith('2019-02')
+                                                or col.startswith('2019-03')
+                                                or col.startswith('2019-04')
+                                                or col.startswith('2019-05')
+                                                or col.startswith('2019-06')
+                                                or col.startswith('2019-07')
+                                                or col.startswith('2019-08'))]
+    elif dataset == "FL_weekly":
+        columns_used = [col for col in data if (col.startswith('2019-01')
+                                                or col.startswith('2019-02')
+                                                or col.startswith('2019-03')
+                                                or col.startswith('2019-04')
+                                                or col.startswith('2019-05')
+                                                or col.startswith('2019-06')
+                                                or col.startswith('2019-07')
+                                                or col.startswith('2019-08'))]
+    elif dataset == "SC_weekly":
+        columns_used = [col for col in data if (col.startswith('2018-01')
+                                                or col.startswith('2018-02')
+                                                or col.startswith('2018-03')
+                                                or col.startswith('2018-04')
+                                                or col.startswith('2018-05')
+                                                or col.startswith('2018-06')
+                                                or col.startswith('2018-07')
+                                                or col.startswith('2018-08'))]
+
+    average_visits = data[columns_used].mean(axis=1)
     # Step 2: Normalize the average visits and the Intensity
     normalized_visits = (average_visits - average_visits.min()) / (average_visits.max() - average_visits.min())
     normalized_intensity = (data['Intensity'] - data['Intensity'].min()) / (
@@ -1334,9 +1367,14 @@ def process_data():
                                     "data/data_FL_weekly/FL_weekly_visits_filtered_with_region_id.csv",
                                     "data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv")
         add_item_id_and_save("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv")
-        get_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv",
-                     "data/data_FL_weekly")
-        get_poi_feature_add_to_csv_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_distance.csv")
+        if running_baseline:
+            get_poi_intensity("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv",
+                              "data/data_FL_weekly")
+            get_poi_feature_add_to_csv("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_intensity.csv")
+        else:
+            get_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain.csv",
+                         "data/data_FL_weekly")
+            get_poi_feature_add_to_csv_distance("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_distance.csv")
         get_kg("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv",
                'data/data_FL_weekly')
         remove_duplicate_kg_data("data/data_FL_weekly/kg.txt")
@@ -1364,10 +1402,14 @@ def process_data():
                                     "data/data_SC_weekly/SC_weekly_visits_filtered_with_region_id.csv",
                                     "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv")
         add_item_id_and_save("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv")
-        get_distance("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv",
-                     "data/data_SC_weekly")
-        get_poi_feature_add_to_csv_distance(
-            "data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_distance.csv")
+        if running_baseline:
+            get_poi_intensity("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv",
+                              "data/data_SC_weekly")
+            get_poi_feature_add_to_csv("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_intensity.csv")
+        else:
+            get_distance("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain.csv",
+                         "data/data_SC_weekly")
+            get_poi_feature_add_to_csv_distance("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_distance.csv")
         get_kg("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv",
                'data/data_SC_weekly')
         remove_duplicate_kg_data("data/data_SC_weekly/kg.txt")
