@@ -4,6 +4,8 @@ import json
 import pandas as pd
 from ast import literal_eval
 
+from dataset_config import dataset, running_baseline, outer_dim
+
 
 class Data:
     def __init__(self, data_dir):
@@ -38,7 +40,13 @@ class Data:
         #     regfeas.append(tmp)
         # regfeas = np.array(regfeas, dtype=np.float64)
         # Load the data from the given file path
-        data = pd.read_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        data = pd.DataFrame()
+        if dataset == "florida":
+            data = pd.read_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        if dataset == "FL_weekly":
+            data = pd.read_csv("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        if dataset == "SC_weekly":
+            data = pd.read_csv("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv")
         # Extract the 'feature' column and convert it from string representation of lists to actual lists
         # We use literal_eval to safely evaluate the string as a Python list
         # print(type(data['feature'][1]))
@@ -168,33 +176,34 @@ class Data:
         #     return outer_list, np.array(outer_list).shape[1]
 
         # Load the CSV file
-        file_path = 'data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv'
-        florida_visits_df = pd.read_csv(file_path)
-        def extract_monthly_data(df, year, months):
-            """
-            Extracts data for specific months of a given year from a dataframe.
+        florida_visits_df = pd.DataFrame()
+        if dataset == "florida":
+            florida_visits_df = pd.read_csv("data/data_florida/Florida_visits_reordered_with_isTrain_with_feature.csv")
+        if dataset == "FL_weekly":
+            florida_visits_df = pd.read_csv("data/data_FL_weekly/FL_weekly_visits_reordered_with_isTrain_with_feature.csv")
+        if dataset == "SC_weekly":
+            florida_visits_df = pd.read_csv("data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv")
 
-            :param df: DataFrame containing the data.
-            :param year: The specific year (e.g., 2019).
-            :param months: List of months (integers) to extract data for.
-            :return: A 2D list where each outer list item is a row from the dataframe,
-                     and the inner list contains data for the specified months.
-            """
+        def extract_monthly_data(df):
             # Construct column names for the specified months
-            month_columns = [f"{year}-{str(month).zfill(2)}" for month in months]
-
+            month_columns = []
+            if dataset == 'florida':
+                month_columns = [f"{2019}-{str(month).zfill(2)}" for month in [9, 10, 11, 12]]
+            elif dataset == 'FL_weekly':
+                month_columns = ["2019-09-02", "2019-09-09", "2019-09-16", "2019-09-23", "2019-09-30"]
+            elif dataset == 'SC_weekly':
+                month_columns = ["2018-09-17", "2018-09-24", "2018-10-01", "2018-10-08"]
             # Extract the relevant columns
             extracted_data = df[month_columns].values.tolist()
-
             return extracted_data
 
-        extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 12])
+        extracted_2019_data = extract_monthly_data(florida_visits_df)
 
         socall_nreg = len(extracted_2019_data)
 
         three_dim_list = []
 
-        for i in range(10):
+        for i in range(outer_dim):
             three_dim_list.append(extracted_2019_data)
 
         def to_four_dimensions(three_dim_list):

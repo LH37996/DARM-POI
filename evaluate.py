@@ -8,8 +8,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore')
 
-dataset = 'FL_weekly' ##################### modify the dataset here
-running_baseline = True
+from dataset_config import dataset, running_baseline
+
 
 filepath = './data/data_{}/'.format(dataset)
 resultpath = './output/output_{}/'.format(dataset)
@@ -116,14 +116,25 @@ def extract_monthly_data(df):
 
 extracted_2019_data = extract_monthly_data(florida_visits_df)
 mean_Jan_to_Aug = florida_visits_df["mean_Jan_to_Aug"].values.tolist()
-data_2019_08 = florida_visits_df["2019-08"].values.tolist()
+data_2019_08 = []
+prediction_len = 0
+if dataset == 'florida':
+    data_2019_08 = florida_visits_df["2019-08"].values.tolist()
+    prediction_len = 4
+elif dataset == 'FL_weekly':
+    data_2019_08 = florida_visits_df["2019-08-26"].values.tolist()
+    prediction_len = 5
+elif dataset == 'SC_weekly':
+    data_2019_08 = florida_visits_df["2018-09-10"].values.tolist()
+    prediction_len = 4
+assert prediction_len > 0
 socall_nreg = len(extracted_2019_data)
 if not running_baseline:
     for i in range(socall_nreg):
-        for j in range(4):
+        for j in range(prediction_len):
             extracted_2019_data[i][j] *= mean_Jan_to_Aug[i]
         extracted_2019_data[i][0] += data_2019_08[i]
-        for j in range(1, 4):
+        for j in range(1, prediction_len):
             extracted_2019_data[i][j] += extracted_2019_data[i][j - 1]
 three_dim_list = []
 for i in range(20):
@@ -172,8 +183,6 @@ pred=np.load(resultpath+"sample_500_final.npz".format(it))
 
 pred=pred['sample']
 # pred=(pred*(M-m)+m+M)/2
-
-
 
 print(len(pred[0]))
 print(len(pred[0][0]))

@@ -7,15 +7,13 @@ import json
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime
 from scipy.spatial import Voronoi, voronoi_plot_2d
 import random
 import csv
 
-
-dataset = "FL_weekly"
-running_baseline = True
+from dataset_config import dataset, running_baseline
 
 
 def aggregate_and_plot_visits(florida_visits_path, lat_delta, long_delta, plot=1):
@@ -321,30 +319,110 @@ def count_wsf2_items():
     print(total_items)
 
 
+# def filter_csv_files(data_folder_path):
+#     source_folder = data_folder_path + "/daily_summaries_latest_filtered"
+#     destination_folder = data_folder_path + "/daily_summaries_latest_filtered_wsf2"
+#     # Create the destination folder if it doesn't exist
+#     if not os.path.exists(destination_folder):
+#         os.makedirs(destination_folder)
+#
+#     for file in os.listdir(source_folder):
+#         if file.endswith('.csv'):
+#             file_path = os.path.join(source_folder, file)
+#             try:
+#                 df = pd.read_csv(file_path)
+#
+#                 # Check if there's at least one non-empty entry in 'WSF2' column
+#                 if df['WSF2'].notna().any():
+#                     # Copy file to destination folder
+#                     shutil.copy(file_path, destination_folder)
+#             except Exception as e:
+#                 print(f"Error processing file {file}: {e}")
+
+
+def filter_and_copy_file(file, source_folder, destination_folder):
+    if file.endswith('.csv'):
+        file_path = os.path.join(source_folder, file)
+        try:
+            df = pd.read_csv(file_path)
+            # Check if there's at least one non-empty entry in 'WSF2' column
+            if df['WSF2'].notna().any():
+                # Copy file to destination folder
+                shutil.copy(file_path, destination_folder)
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+
 def filter_csv_files(data_folder_path):
     source_folder = data_folder_path + "/daily_summaries_latest_filtered"
     destination_folder = data_folder_path + "/daily_summaries_latest_filtered_wsf2"
-    # Create the destination folder if it doesn't exist
+
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
 
-    for file in os.listdir(source_folder):
-        if file.endswith('.csv'):
-            file_path = os.path.join(source_folder, file)
-            try:
-                df = pd.read_csv(file_path)
+    files = os.listdir(source_folder)
 
-                # Check if there's at least one non-empty entry in 'WSF2' column
-                if df['WSF2'].notna().any():
-                    # Copy file to destination folder
-                    shutil.copy(file_path, destination_folder)
-            except Exception as e:
-                print(f"Error processing file {file}: {e}")
+    # Use ThreadPoolExecutor to process files in parallel
+    with ThreadPoolExecutor() as executor:
+        tqdm(executor.map(filter_and_copy_file, files, [source_folder]*len(files), [destination_folder]*len(files)))
 
 
-# 新版本：实现了region对应
+# # 新版本：实现了region对应
+# def daily_summaries_latest_state_filter(data_folder_path, latitude_min, latitude_max, longitude_min, longitude_max):
+#     # 定义FL或者SC的经纬度范围
+#     florida_bounds = {
+#         "latitude_min": latitude_min,
+#         "latitude_max": latitude_max,
+#         "longitude_min": longitude_min,
+#         "longitude_max": longitude_max
+#     }
+#
+#     # 文件夹路径
+#     input_folder = data_folder_path + '/daily-summaries-latest'
+#     output_folder = data_folder_path + 'daily_summaries_latest_filtered'
+#
+#     # 如果输出文件夹不存在，则创建它
+#     if not os.path.exists(output_folder):
+#         os.makedirs(output_folder)
+#
+#     # 遍历文件夹中的所有文件
+#     for file in os.listdir(input_folder):
+#         if file.endswith('.csv'):
+#             file_path = os.path.join(input_folder, file)
+#             df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
+#
+#             # 筛选数据
+#             filtered_df = df[
+#                 (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
+#                 (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
+#                 (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
+#                 (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
+#                 (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
+#                 ]
+#
+#             # 如果有符合条件的数据，将其保存到新文件夹
+#             if not filtered_df.empty:
+#                 filtered_df.to_csv(os.path.join(output_folder, file), index=False)
+
+
+def filter_file(file, input_folder, output_folder, florida_bounds):
+    if file.endswith('.csv'):
+        file_path = os.path.join(input_folder, file)
+        df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
+
+        # 筛选数据
+        filtered_df = df[
+            (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
+            (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
+            (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
+            (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
+            (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
+        ]
+
+        # 如果有符合条件的数据，将其保存到新文件夹
+        if not filtered_df.empty:
+            filtered_df.to_csv(os.path.join(output_folder, file), index=False)
+
 def daily_summaries_latest_state_filter(data_folder_path, latitude_min, latitude_max, longitude_min, longitude_max):
-    # 定义FL或者SC的经纬度范围
     florida_bounds = {
         "latitude_min": latitude_min,
         "latitude_max": latitude_max,
@@ -352,40 +430,24 @@ def daily_summaries_latest_state_filter(data_folder_path, latitude_min, latitude
         "longitude_max": longitude_max
     }
 
-    # 文件夹路径
     input_folder = data_folder_path + '/daily-summaries-latest'
-    output_folder = data_folder_path + 'daily_summaries_latest_filtered'
+    output_folder = data_folder_path + '/daily_summaries_latest_filtered'
 
-    # 如果输出文件夹不存在，则创建它
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    # 遍历文件夹中的所有文件
-    for file in os.listdir(input_folder):
-        if file.endswith('.csv'):
-            file_path = os.path.join(input_folder, file)
-            df = pd.read_csv(file_path, dtype={"DATE": "string", "LATITUDE": "string", "LONGITUDE": "string"})
+    files = os.listdir(input_folder)
 
-            # 筛选数据
-            filtered_df = df[
-                (df['DATE'].str.startswith('2019') | df['DATE'].str.startswith('2020')) &
-                (df['LATITUDE'].apply(lambda x: float(x)) >= florida_bounds['latitude_min']) &
-                (df['LATITUDE'].apply(lambda x: float(x)) <= florida_bounds['latitude_max']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) >= florida_bounds['longitude_min']) &
-                (df['LONGITUDE'].apply(lambda x: float(x)) <= florida_bounds['longitude_max'])
-                ]
-
-            # 如果有符合条件的数据，将其保存到新文件夹
-            if not filtered_df.empty:
-                filtered_df.to_csv(os.path.join(output_folder, file), index=False)
+    with ThreadPoolExecutor() as executor:
+        tqdm(executor.map(filter_file, files, [input_folder]*len(files), [output_folder]*len(files), [florida_bounds]*len(files)))
 
 
 def daily_summaries_latest_filter(data_folder_path):
     daily_summaries_latest_state_filter(data_folder_path,
-                                        24.545429,  # latitude_min
-                                        30.997623,  # latitude_max
-                                        -87.518155,  # longitude_min
-                                        -80.032537   # longitude_max
+                                        32.0346,  # latitude_min
+                                        35.21554,  # latitude_max
+                                        -83.35391,  # longitude_min
+                                        -78.54203   # longitude_max
                                         )
     filter_csv_files(data_folder_path)
 
@@ -394,7 +456,7 @@ def filter_non_zero_rows(dataset, file_path, year, start_month=1, end_month=12):
     df = pd.read_csv(file_path)
 
     # Create a list of column names for the specified months
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         columns_to_check = [f"{year}-{str(month).zfill(2)}" for month in range(start_month, end_month + 1)]
     elif dataset == "FL_weekly":
         columns_to_check = [col for col in df.columns if col.startswith(str(year))]
@@ -419,7 +481,7 @@ def remove_rows_with_too_large_data(dataset, file_path):
     df = pd.read_csv(file_path)
 
     # Define the criteria for rows to keep (those with all values <= 100000 in the monthly visit columns)
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         criteria = (df.loc[:, '2019-01':'2019-12'] <= 10000).all(axis=1)
     elif dataset == "FL_weekly":
         criteria = (df.loc[:, '2019-01-07':'2019-09-30'] <= 10000).all(axis=1)
@@ -448,7 +510,7 @@ def initial_file_filter(origin_path, target_path, data_count):
     florida_visits = pd.read_csv(file_path)
     # Calculating the mean visitation for each place in 2019
     columns_used = []
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         columns_used = [col for col in florida_visits if col.startswith('2019')]
     elif dataset == "FL_weekly":
         columns_used = [col for col in florida_visits if (col.startswith('2019-01')
@@ -633,7 +695,7 @@ def haversine(lon1, lat1, lon2, lat2):
 
 # Load the aggregated_florida_visits.csv file to get the latitude and longitude range
 florida_visits_file = ""
-if dataset == "FL_monthly":
+if dataset == "florida":
     florida_visits_file = 'data/data_florida/Florida_visits_2019_2020.csv'
 elif dataset == "FL_weekly":
     florida_visits_file = 'data/data_FL_weekly/FL_weekly_visits_2019.csv'
@@ -652,7 +714,7 @@ florida_lat_lon_range = {
     "max_longitude": max_longitude
 }
 
-if dataset == "FL_monthly":
+if dataset == "florida":
     observation_intensity_list, observation_latitude_list, observation_longitude_list = (
         # process_weather_data_to_list("data/data_florida/daily_summaries_latest_filtered_wsf2")
         process_weather_station_data("data/data_florida/daily_summaries_latest_filtered_wsf2", florida_lat_lon_range)
@@ -816,7 +878,7 @@ def get_poi_feature_add_to_csv_distance(file_path):
     data = pd.read_csv(file_path)
     # Step 1: Calculate the average visits from Jan 2020 to Mar 2020
     columns_used = []
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         columns_used = [col for col in data if (col.startswith('2019-01')
                                              or col.startswith('2019-02')
                                              or col.startswith('2019-03')
@@ -1098,7 +1160,7 @@ def get_ratio(file_path, output_path):
 
     # Step 2: Calculate the mean of POI visits
     columns_used = []
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         columns_used = [col for col in data if (col.startswith('2019-01')
                                              or col.startswith('2019-02')
                                              or col.startswith('2019-03')
@@ -1129,7 +1191,7 @@ def get_ratio(file_path, output_path):
     data['mean_Jan_to_Aug'] = data[columns_used].mean(axis=1)
 
     # Step 3: Update the values for September to December 2019
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         for month in range(9, 13):
             month_col = f"2019-{str(month).zfill(2)}"
             last_month_col = f"2019-{str(month - 1).zfill(2)}"
@@ -1206,7 +1268,7 @@ def update_weekly_visits(visits_csv_path, weekly_data_dir):
 
 # Start with: Florida_visits_2019_2020.csv, daily_summaries_latest_filtered_wsf2
 def process_data():
-    if dataset == "FL_monthly":
+    if dataset == "florida":
         initial_file_filter('data/data_florida/Florida_visits_2019_2020.csv',
                             "data/data_florida/Florida_visits_filtered.csv",
                             30000)
