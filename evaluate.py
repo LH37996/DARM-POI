@@ -101,25 +101,20 @@ elif dataset == 'SC_weekly':
     file_path = 'data/data_SC_weekly/SC_weekly_visits_reordered_with_isTrain_with_feature.csv'
 florida_visits_df = pd.read_csv(file_path)
 
-def extract_monthly_data(df, year, months):
-    """
-    Extracts data for specific months of a given year from a dataframe.
-
-    :param df: DataFrame containing the data.
-    :param year: The specific year (e.g., 2019).
-    :param months: List of months (integers) to extract data for.
-    :return: A 2D list where each outer list item is a row from the dataframe,
-             and the inner list contains data for the specified months.
-    """
+def extract_monthly_data(df):
     # Construct column names for the specified months
-    month_columns = [f"{year}-{str(month).zfill(2)}" for month in months]
-
+    month_columns = []
+    if dataset == 'florida':
+        month_columns = [f"{2019}-{str(month).zfill(2)}" for month in [9, 10, 11, 12]]
+    elif dataset == 'FL_weekly':
+        month_columns = ["2019-09-02", "2019-09-09", "2019-09-16", "2019-09-23", "2019-09-30"]
+    elif dataset == 'SC_weekly':
+        month_columns = ["2018-09-17", "2018-09-24", "2018-10-01", "2018-10-08"]
     # Extract the relevant columns
     extracted_data = df[month_columns].values.tolist()
-
     return extracted_data
 
-extracted_2019_data = extract_monthly_data(florida_visits_df, 2019, [9, 10, 11, 12])
+extracted_2019_data = extract_monthly_data(florida_visits_df)
 mean_Jan_to_Aug = florida_visits_df["mean_Jan_to_Aug"].values.tolist()
 data_2019_08 = florida_visits_df["2019-08"].values.tolist()
 socall_nreg = len(extracted_2019_data)
